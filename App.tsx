@@ -105,10 +105,10 @@ const App: React.FC = () => {
     }
   };
 
-  // If not authenticated, show PIN login
-  if (!isAuthenticated) {
-    return <PinLogin onSuccess={() => setIsAuthenticated(true)} />;
-  }
+  // Authentication DISABLED - No PIN required
+  // if (!isAuthenticated) {
+  //   return <PinLogin onSuccess={() => setIsAuthenticated(true)} />;
+  // }
 
   return (
     <div className="flex h-screen w-screen bg-[#f0f2f5] overflow-hidden">
