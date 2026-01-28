@@ -29,6 +29,18 @@ const handleStatusUpdate = async (statusData) => {
     }
 };
 
+// Handle typing indicator from Meta (when client is typing)
+const handleTypingIndicator = (phone, isTyping = true) => {
+    console.log(`⌨️ ${phone} está ${isTyping ? 'escribiendo...' : 'dejó de escribir'}`);
+
+    if (global.io) {
+        global.io.emit('contact_typing', {
+            phone: phone,
+            isTyping: isTyping
+        });
+    }
+};
+
 // VERIFY TOKEN (GET)
 const verifyWebhook = (req, res) => {
     const mode = req.query['hub.mode'];

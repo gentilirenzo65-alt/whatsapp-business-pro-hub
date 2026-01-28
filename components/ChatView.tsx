@@ -1,41 +1,64 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Contact, Message, BusinessAPIConfig, Tag, QuickReply } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Contact, Message, QuickReply } from '../types';
+
+// Zustand Stores
+import { useContactsStore, useChannelsStore, useAppStore, useMessagesStore } from '../stores';
 
 interface ChatViewProps {
-  contacts: Contact[];
-  selectedContact: Contact | null;
-  onSelectContact: (contact: Contact) => void;
-  businessApis: BusinessAPIConfig[];
-  currentApiId: string;
-  onSwitchApi: (id: string) => void;
-  availableTags: Tag[];
-  quickReplies: QuickReply[];
-  onUpdateContactTags: (contactId: string, tagIds: string[]) => void;
-  onUpdateContact: (contact: Contact) => void;
+  selectedContactId: string | null;
+  onSelectContact: (contact: { id: string }) => void;
 }
 
 const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3';
 
-import io from 'socket.io-client';
 import axios from 'axios';
-import { API_URL, SOCKET_URL, BACKEND_URL } from '../config';
+import { API_URL, BACKEND_URL } from '../config';
 
 const ChatView: React.FC<ChatViewProps> = ({
-  // ... (props remain)
-  contacts,
-  selectedContact,
-  onSelectContact,
-  businessApis,
-  currentApiId,
-  onSwitchApi,
-  availableTags,
-  quickReplies,
-  onUpdateContactTags,
-  onUpdateContact
+  selectedContactId,
+  onSelectContact
 }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  // ... (other states remain)
+  // === ZUSTAND STORES ===
+  const { contacts, updateContact, updateContactTags, resetUnread, incrementUnread } = useContactsStore();
+  const { channels, currentChannelId, setCurrentChannel } = useChannelsStore();
+  const { tags: availableTags, quickReplies, isConnected, setConnected, typingContacts } = useAppStore();
+  const {
+    messagesByContact,
+    fetchMessages: fetchMessagesFromStore,
+    addMessage: addMessageToStore,
+    updateMessageStatus
+  } = useMessagesStore();
+
+  // Derive current contact from store
+  const selectedContact = useMemo(() =>
+    selectedContactId ? contacts.find(c => c.id === selectedContactId) || null : null,
+    [selectedContactId, contacts]
+  );
+
+  // Get messages for current contact from cache
+  const messages = useMemo(() => {
+    if (!selectedContactId) return [];
+    const cached = messagesByContact[selectedContactId] || [];
+    // Transform for display
+    return cached.map((m: any) => ({
+      ...m,
+      timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp),
+      isMine: m.direction === 'outbound',
+      mediaUrl: m.media_url,
+      mediaType: m.type,
+      text: m.body,
+      fileName: m.body
+    }));
+  }, [selectedContactId, messagesByContact]);
+
+  // Derive current API from store
+  const currentApi = channels.find(api => api.id === currentChannelId) || channels[0];
+  const businessApis = channels;
+  const currentApiId = currentChannelId;
+  const onSwitchApi = setCurrentChannel;
+
+  // Local state (UI only, not shared)
   const [inputText, setInputText] = useState('');
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showContactEditor, setShowContactEditor] = useState(false);
@@ -44,88 +67,46 @@ const ChatView: React.FC<ChatViewProps> = ({
   const [showMediaMenu, setShowMediaMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Typing indicators now come from appStore (managed by App.tsx)
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const socketRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectedContactIdRef = useRef<string | null>(null);
 
-  const currentApi = businessApis.find(api => api.id === currentApiId) || businessApis[0];
+  // Keep the ref in sync with selectedContact
+  useEffect(() => {
+    selectedContactIdRef.current = selectedContactId || null;
+  }, [selectedContactId]);
 
   useEffect(() => {
     audioRef.current = new Audio(NOTIFICATION_SOUND_URL);
-
-    // CONNECT SOCKET
-    socketRef.current = io(SOCKET_URL);
-
-    socketRef.current.on('new_message', (newMsg: Message) => {
-      // Only append if it belongs to current contact OR needed for notification
-      // Simplified for now: Append if matches selected, or just log
-      setMessages(prev => {
-        // Prevent duplicates
-        if (prev.find(m => m.id === newMsg.id)) return prev;
-        // Check if belongs to open chat (needs context check, simplified here)
-        // NOTE: Ideally we check newMsg.contact_id vs selectedContact.id, but socket msg might not have contact_id populated in same format. 
-        // For 'me' messages, senderId is me throughout.
-        return [...prev, newMsg];
-      });
-      audioRef.current?.play().catch(() => { });
-    });
-
-    // Listen for message status updates (delivered, read)
-    socketRef.current.on('message_status_update', (data: { messageId: string; status: string }) => {
-      setMessages(prev => prev.map(m =>
-        m.id === data.messageId
-          ? { ...m, status: data.status as Message['status'] }
-          : m
-      ));
-    });
-
-    return () => {
-      socketRef.current.disconnect();
-    };
   }, []);
 
+  // FETCH MESSAGES from store when contact changes
   useEffect(() => {
-    if (selectedContact) {
-      // FETCH REAL MESSAGES
-      const fetchMessages = async () => {
-        try {
-          const res = await axios.get(`${API_URL}/messages/${selectedContact.id}`);
-          // Transform DB Date string to Date object if needed
-          const parsed = res.data.map((m: any) => ({
-            ...m,
-            timestamp: new Date(m.timestamp),
-            isMine: m.direction === 'outbound',
-            mediaUrl: m.media_url,
-            mediaType: m.type,
-            text: m.body, // CORRECT MAPPING
-            fileName: m.body
-          }));
-          setMessages(parsed);
-        } catch (e) {
-          console.error("Error fetching messages", e);
-        }
-      };
-
-      fetchMessages();
+    if (selectedContactId) {
+      fetchMessagesFromStore(selectedContactId);
 
       setShowTagPicker(false);
       setShowContactEditor(false);
       setShowMediaMenu(false);
-      setEditingContact({ ...selectedContact });
+      if (selectedContact) {
+        setEditingContact({ ...selectedContact });
+      }
 
       // Mark as read and sync with server
-      if (selectedContact.unreadCount > 0) {
-        onUpdateContact({ ...selectedContact, unreadCount: 0 });
+      if (selectedContact && selectedContact.unreadCount > 0) {
+        resetUnread(selectedContactId);
 
         // Sync unreadCount with server
-        axios.put(`${API_URL}/contacts/${selectedContact.id}`, {
+        axios.put(`${API_URL}/contacts/${selectedContactId}`, {
           unreadCount: 0
         }).catch(err => console.error('Error syncing unreadCount:', err));
       }
     }
-  }, [selectedContact?.id]); // Use ID specifically
+  }, [selectedContactId]); // Use ID specifically
 
   // ... (scroll effect remain)
 
@@ -161,7 +142,7 @@ const ChatView: React.FC<ChatViewProps> = ({
     const newTags = currentTags.includes(tagId)
       ? currentTags.filter(id => id !== tagId)
       : [...currentTags, tagId];
-    onUpdateContactTags(selectedContact.id, newTags);
+    updateContactTags(selectedContact.id, newTags);
   };
 
   const toggleEditingTag = (tagId: string) => {
@@ -175,20 +156,23 @@ const ChatView: React.FC<ChatViewProps> = ({
   const handleSendMessage = async () => {
     if (!inputText.trim() || !selectedContact) return;
 
-    // Optimistic UI Update (Fake it immediately)
+    // Optimistic UI Update (Add to store immediately)
     const tempId = Date.now().toString();
     const newMsg: Message = {
       id: tempId,
       senderId: 'me',
       text: inputText,
+      body: inputText,
       timestamp: new Date(),
       isMine: true,
       status: 'pending',
+      direction: 'outbound',
+      contact_id: selectedContact.id,
       channelId: currentApi?.phoneNumber || 'unknown',
       mediaType: 'text'
     };
 
-    setMessages([...messages, newMsg]);
+    addMessageToStore(selectedContact.id, newMsg as any);
     setInputText('');
 
     try {
@@ -220,15 +204,18 @@ const ChatView: React.FC<ChatViewProps> = ({
       id: tempId,
       senderId: 'me',
       text: `[Enviando ${mediaType}...]`,
+      body: `[Enviando ${mediaType}...]`,
       timestamp: new Date(),
       isMine: true,
       status: 'pending',
+      direction: 'outbound',
+      contact_id: selectedContact.id,
       channelId: currentApi?.phoneNumber || 'unknown',
       mediaType: mediaType,
       mediaUrl: URL.createObjectURL(file)
     };
 
-    setMessages(prev => [...prev, tempMsg]);
+    addMessageToStore(selectedContact.id, tempMsg as any);
 
     try {
       const formData = new FormData();
@@ -237,20 +224,13 @@ const ChatView: React.FC<ChatViewProps> = ({
       formData.append('channelId', currentApi?.id || '');
       formData.append('caption', '');
 
-      const res = await axios.post(`${API_URL}/send-media`, formData, {
+      await axios.post(`${API_URL}/send-media`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-
-      // Replace temp message with real one
-      setMessages(prev => prev.map(m =>
-        m.id === tempId ? { ...res.data, isMine: true, mediaType } : m
-      ));
+      // Socket will handle the real message update
     } catch (error) {
       console.error("Media send failed", error);
-      // Mark as failed
-      setMessages(prev => prev.map(m =>
-        m.id === tempId ? { ...m, status: 'failed', text: '[Error al enviar]' } : m
-      ));
+      // TODO: Mark message as failed in store
     }
   };
 
@@ -268,13 +248,13 @@ const ChatView: React.FC<ChatViewProps> = ({
       if (editingContact.id) {
         // UPDATE Existing
         await axios.put(`${API_URL}/contacts/${editingContact.id}`, editingContact);
-        onUpdateContact(editingContact as Contact);
+        updateContact(editingContact as Contact & { id: string });
       } else {
         // CREATE New
         if (!editingContact.phone) return alert('El teléfono es obligatorio');
         const res = await axios.post(`${API_URL}/contacts`, editingContact);
         const newContact = res.data;
-        onUpdateContact(newContact);
+        updateContact(newContact);
         onSelectContact(newContact); // Automatically open chat
       }
       setShowContactEditor(false);
@@ -333,6 +313,11 @@ const ChatView: React.FC<ChatViewProps> = ({
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xl font-black text-gray-800 tracking-tight">Chats</h2>
             <div className="flex items-center space-x-2">
+              {/* Connection Status Badge */}
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 ${isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+                {isConnected ? 'EN VIVO' : 'DESCONECTADO'}
+              </span>
               <button
                 onClick={() => { setEditingContact({}); setShowContactEditor(true); }}
                 className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center text-white hover:bg-green-700 transition shadow-sm"
@@ -435,7 +420,12 @@ const ChatView: React.FC<ChatViewProps> = ({
           <>
             {/* Header */}
             <div className="p-3 bg-[#f0f2f5] flex items-center border-b z-30 shadow-sm">
-              <img src={selectedContact.avatar} className="w-10 h-10 rounded-full mr-3 border-2 border-white shadow-sm cursor-pointer" alt="" onClick={() => setShowContactEditor(true)} />
+              {/* Avatar with connection indicator */}
+              <div className="relative">
+                <img src={selectedContact.avatar} className="w-10 h-10 rounded-full mr-3 border-2 border-white shadow-sm cursor-pointer" alt="" onClick={() => setShowContactEditor(true)} />
+                {/* Connection Status Dot */}
+                <div className={`absolute bottom-0 right-2 w-3 h-3 rounded-full border-2 border-white ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} title={isConnected ? 'Conectado' : 'Desconectado'}></div>
+              </div>
               <div className="flex-1 cursor-pointer" onClick={() => setShowContactEditor(true)}>
                 <div className="flex items-center">
                   <h3 className="font-bold text-gray-900 mr-2">{selectedContact.name}</h3>
@@ -450,7 +440,15 @@ const ChatView: React.FC<ChatViewProps> = ({
                     })}
                   </div>
                 </div>
-                <p className="text-[10px] text-gray-500 font-bold">{selectedContact.phone} <span className="mx-1">•</span> <span className="text-blue-500">Canal: {selectedContact.assignedBusinessPhone}</span></p>
+                {/* Status line - shows typing or phone/channel */}
+                {typingContacts[selectedContact.phone] ? (
+                  <p className="text-[10px] text-green-600 font-bold animate-pulse">
+                    <i className="fa-solid fa-keyboard mr-1"></i>
+                    Escribiendo...
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-gray-500 font-bold">{selectedContact.phone} <span className="mx-1">•</span> <span className="text-blue-500">Canal: {selectedContact.assignedBusinessPhone}</span></p>
+                )}
               </div>
               <div className="flex items-center space-x-4 pr-2">
                 {/* File Upload Button */}

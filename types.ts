@@ -15,14 +15,19 @@ export interface Message {
   id: string;
   senderId: string;
   text?: string;
+  body?: string;  // Backend uses 'body' for message content
   timestamp: Date;
   isMine: boolean;
-  status: 'sent' | 'delivered' | 'read' | 'pending';
+  status: 'sent' | 'delivered' | 'read' | 'pending' | 'failed';
+  direction?: 'inbound' | 'outbound';
+  contact_id?: string;
   channelId?: string;
-  mediaType?: 'image' | 'audio' | 'document' | 'video' | 'text';
+  mediaType?: 'image' | 'audio' | 'document' | 'video' | 'text' | 'sticker' | 'interactive';
   mediaUrl?: string;
+  media_url?: string; // Backend uses snake_case
   fileName?: string;
   fileSize?: string;
+  type?: string; // Backend message type
 }
 
 export interface Contact {
@@ -36,6 +41,11 @@ export interface Contact {
   assignedBusinessPhone: string;
   tags: string[]; // Array of Tag IDs
   notes?: string;
+  // CRM Fields
+  email?: string;
+  birthday?: string; // YYYY-MM-DD format
+  company?: string;
+  customFields?: Record<string, string>;
 }
 
 export interface Template {

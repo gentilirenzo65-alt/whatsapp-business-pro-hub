@@ -1,34 +1,33 @@
 
 import React, { useState, useEffect } from 'react';
-import { Broadcast, Template, BusinessAPIConfig, Tag, Contact } from '../types';
+import { Broadcast } from '../types';
 import axios from 'axios';
 import io from 'socket.io-client';
 import { API_URL, SOCKET_URL } from '../config';
 
-interface BroadcastViewProps {
-  broadcasts: Broadcast[];
-  templates: Template[];
-  businessApis: BusinessAPIConfig[];
-  currentApiId: string;
-  onUpdateBroadcasts: React.Dispatch<React.SetStateAction<Broadcast[]>>;
-  availableTags: Tag[];
-  contacts: Contact[];
-}
+// Zustand Stores
+import {
+  useContactsStore,
+  useChannelsStore,
+  useAppStore,
+  useBroadcastsStore,
+  useTemplatesStore
+} from '../stores';
 
-const BroadcastView: React.FC<BroadcastViewProps> = ({
-  broadcasts,
-  templates,
-  businessApis,
-  currentApiId,
-  onUpdateBroadcasts,
-  availableTags,
-  contacts
-}) => {
+const BroadcastView: React.FC = () => {
+  // === ZUSTAND STORES ===
+  const { contacts } = useContactsStore();
+  const { channels, currentChannelId } = useChannelsStore();
+  const { tags: availableTags } = useAppStore();
+  const { broadcasts, fetchBroadcasts, addBroadcast, updateBroadcast, removeBroadcast } = useBroadcastsStore();
+  const { templates, fetchTemplates } = useTemplatesStore();
+
+  // Local state
   const [isCreating, setIsCreating] = useState(false);
   const [newBroadcast, setNewBroadcast] = useState<Partial<Broadcast> & { delayMin?: number; delayMax?: number }>({
     name: '',
-    templateId: templates[0]?.id || '',
-    apiId: currentApiId,
+    templateId: '',
+    apiId: currentChannelId,
     targetTagId: undefined,
     scheduledTime: '',
     recipientsCount: 0,
@@ -41,26 +40,35 @@ const BroadcastView: React.FC<BroadcastViewProps> = ({
     return contacts.filter(c => c.tags.includes(tagId)).length;
   };
 
-  // Fetch broadcasts on mount
+  // Fetch data on mount
   useEffect(() => {
-    const fetchBroadcasts = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/broadcasts`);
-        onUpdateBroadcasts(res.data);
-      } catch (e) {
-        console.error('Error fetching broadcasts:', e);
-      }
-    };
     fetchBroadcasts();
+    fetchTemplates();
+  }, []);
 
-    // Listen for real-time progress updates
+  // Update default templateId when templates load
+  useEffect(() => {
+    if (templates.length > 0 && !newBroadcast.templateId) {
+      setNewBroadcast(prev => ({ ...prev, templateId: templates[0].id }));
+    }
+  }, [templates]);
+
+  // Update default apiId when channels change
+  useEffect(() => {
+    if (currentChannelId) {
+      setNewBroadcast(prev => ({ ...prev, apiId: currentChannelId }));
+    }
+  }, [currentChannelId]);
+
+  // Listen for real-time progress updates
+  useEffect(() => {
     const socket = io(SOCKET_URL);
     socket.on('broadcast_progress', (data: { broadcastId: string; progress: number; sentCount: number; failedCount: number }) => {
-      onUpdateBroadcasts(prev => prev.map(b =>
-        b.id === data.broadcastId
-          ? { ...b, progress: data.progress, status: data.progress >= 100 ? 'SENT' : 'SENDING' }
-          : b
-      ));
+      updateBroadcast({
+        id: data.broadcastId,
+        progress: data.progress,
+        status: data.progress >= 100 ? 'SENT' : 'SENDING'
+      } as Broadcast);
     });
 
     return () => {
@@ -82,7 +90,7 @@ const BroadcastView: React.FC<BroadcastViewProps> = ({
         delayMax: newBroadcast.delayMax || 8
       });
 
-      onUpdateBroadcasts(prev => [res.data, ...prev]);
+      addBroadcast(res.data);
       setIsCreating(false);
       resetForm();
     } catch (error) {
@@ -95,7 +103,7 @@ const BroadcastView: React.FC<BroadcastViewProps> = ({
     setNewBroadcast({
       name: '',
       templateId: templates[0]?.id || '',
-      apiId: currentApiId,
+      apiId: currentChannelId,
       targetTagId: undefined,
       scheduledTime: '',
       recipientsCount: 0,
@@ -107,14 +115,14 @@ const BroadcastView: React.FC<BroadcastViewProps> = ({
   const startNow = async (id: string) => {
     try {
       // Optimistic update
-      onUpdateBroadcasts(prev => prev.map(b => b.id === id ? { ...b, status: 'SENDING', progress: 0 } : b));
+      updateBroadcast({ id, status: 'SENDING', progress: 0 } as Broadcast);
 
       // Call API to start broadcast
       await axios.post(`${API_URL}/broadcasts/${id}/start`);
     } catch (error) {
       console.error('Error starting broadcast:', error);
       // Revert on error
-      onUpdateBroadcasts(prev => prev.map(b => b.id === id ? { ...b, status: 'SCHEDULED' } : b));
+      updateBroadcast({ id, status: 'SCHEDULED' } as Broadcast);
     }
   };
 
@@ -123,7 +131,7 @@ const BroadcastView: React.FC<BroadcastViewProps> = ({
 
     try {
       await axios.delete(`${API_URL}/broadcasts/${id}`);
-      onUpdateBroadcasts(prev => prev.filter(b => b.id !== id));
+      removeBroadcast(id);
     } catch (error) {
       console.error('Error deleting broadcast:', error);
       alert('Error al eliminar difusión');
@@ -186,8 +194,8 @@ const BroadcastView: React.FC<BroadcastViewProps> = ({
                       <i className="fa-solid fa-tower-broadcast text-xs"></i>
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-gray-800">{businessApis.find(a => a.id === b.apiId)?.name}</div>
-                      <div className="text-[10px] text-gray-400 font-mono tracking-tighter">{businessApis.find(a => a.id === b.apiId)?.phoneNumber}</div>
+                      <div className="text-sm font-bold text-gray-800">{channels.find(a => a.id === b.apiId)?.name}</div>
+                      <div className="text-[10px] text-gray-400 font-mono tracking-tighter">{channels.find(a => a.id === b.apiId)?.phoneNumber}</div>
                     </div>
                   </div>
                 </td>
@@ -280,8 +288,8 @@ const BroadcastView: React.FC<BroadcastViewProps> = ({
                       value={newBroadcast.apiId}
                       onChange={(e) => setNewBroadcast({ ...newBroadcast, apiId: e.target.value })}
                     >
-                      {businessApis.map(api => (
-                        <option key={api.id} value={api.id}>{api.id === currentApiId ? '★ ' : ''}{api.name}</option>
+                      {channels.map(api => (
+                        <option key={api.id} value={api.id}>{api.id === currentChannelId ? '★ ' : ''}{api.name}</option>
                       ))}
                     </select>
                     <i className="fa-solid fa-chevron-down absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-xs"></i>

@@ -101,7 +101,7 @@ const createContact = async (req, res) => {
 // PUT /api/contacts/:id
 const updateContact = async (req, res) => {
     const { id } = req.params;
-    const { name, tags, notes, unreadCount } = req.body;
+    const { name, tags, notes, unreadCount, email, birthday, company, customFields } = req.body;
 
     try {
         const contact = await Contact.findByPk(id);
@@ -111,6 +111,11 @@ const updateContact = async (req, res) => {
         if (tags !== undefined) contact.tags = tags;
         if (notes !== undefined) contact.notes = notes;
         if (unreadCount !== undefined) contact.unreadCount = unreadCount;
+        // CRM Fields
+        if (email !== undefined) contact.email = email;
+        if (birthday !== undefined) contact.birthday = birthday;
+        if (company !== undefined) contact.company = company;
+        if (customFields !== undefined) contact.customFields = customFields;
 
         await contact.save();
         res.json(contact);
@@ -481,6 +486,144 @@ const sendMediaMessage = async (req, res) => {
     }
 };
 
+// =====================
+// ANALYTICS
+// =====================
+
+// GET /api/analytics
+const getAnalytics = async (req, res) => {
+    try {
+        const { Op } = require('sequelize');
+        const { Broadcast } = require('../models');
+
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        // Mensajes hoy
+        const messagesToday = await Message.count({
+            where: { timestamp: { [Op.gte]: todayStart } }
+        });
+
+        // Mensajes esta semana
+        const messagesWeek = await Message.count({
+            where: { timestamp: { [Op.gte]: weekAgo } }
+        });
+
+        // Mensajes este mes
+        const messagesMonth = await Message.count({
+            where: { timestamp: { [Op.gte]: monthAgo } }
+        });
+
+        // Total de mensajes
+        const messagesTotal = await Message.count();
+
+        // Mensajes entrantes vs salientes
+        const messagesInbound = await Message.count({
+            where: { direction: 'inbound' }
+        });
+        const messagesOutbound = await Message.count({
+            where: { direction: 'outbound' }
+        });
+
+        // Top 5 contactos con más mensajes
+        const topContacts = await Contact.findAll({
+            attributes: [
+                'id', 'name', 'phone', 'avatar',
+                [sequelize.literal('(SELECT COUNT(*) FROM Messages WHERE Messages.contact_id = Contact.id)'), 'messageCount']
+            ],
+            order: [[sequelize.literal('messageCount'), 'DESC']],
+            limit: 5
+        });
+
+        // Total de contactos
+        const totalContacts = await Contact.count();
+
+        // Broadcasts stats
+        const broadcastsSent = await Broadcast.count({ where: { status: 'SENT' } });
+        const broadcastsFailed = await Broadcast.count({ where: { status: 'FAILED' } });
+        const broadcastsScheduled = await Broadcast.count({ where: { status: 'SCHEDULED' } });
+
+        // Tiempo promedio de respuesta (aproximado)
+        // Calculamos el tiempo entre mensaje inbound y siguiente outbound
+        const recentConversations = await Message.findAll({
+            where: { timestamp: { [Op.gte]: weekAgo } },
+            order: [['contact_id', 'ASC'], ['timestamp', 'ASC']],
+            limit: 500
+        });
+
+        let responseTimes = [];
+        let lastInbound = null;
+        let lastContactId = null;
+
+        for (const msg of recentConversations) {
+            if (msg.contact_id !== lastContactId) {
+                lastInbound = null;
+                lastContactId = msg.contact_id;
+            }
+
+            if (msg.direction === 'inbound') {
+                lastInbound = new Date(msg.timestamp);
+            } else if (msg.direction === 'outbound' && lastInbound) {
+                const responseTime = new Date(msg.timestamp) - lastInbound;
+                if (responseTime > 0 && responseTime < 24 * 60 * 60 * 1000) { // < 24h
+                    responseTimes.push(responseTime);
+                }
+                lastInbound = null;
+            }
+        }
+
+        // Promedio en minutos
+        const avgResponseTimeMs = responseTimes.length > 0
+            ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+            : 0;
+        const avgResponseTimeMinutes = Math.round(avgResponseTimeMs / 1000 / 60);
+
+        // Mensajes por estado
+        const messagesByStatus = {
+            sent: await Message.count({ where: { status: 'sent' } }),
+            delivered: await Message.count({ where: { status: 'delivered' } }),
+            read: await Message.count({ where: { status: 'read' } }),
+            failed: await Message.count({ where: { status: 'failed' } })
+        };
+
+        res.json({
+            messages: {
+                today: messagesToday,
+                week: messagesWeek,
+                month: messagesMonth,
+                total: messagesTotal,
+                inbound: messagesInbound,
+                outbound: messagesOutbound,
+                byStatus: messagesByStatus
+            },
+            contacts: {
+                total: totalContacts,
+                top5: topContacts.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    phone: c.phone,
+                    avatar: c.avatar,
+                    messageCount: parseInt(c.getDataValue('messageCount') || 0)
+                }))
+            },
+            broadcasts: {
+                sent: broadcastsSent,
+                failed: broadcastsFailed,
+                scheduled: broadcastsScheduled
+            },
+            performance: {
+                avgResponseTimeMinutes
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching analytics:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
 module.exports = {
     getContacts,
     getMessages,
@@ -503,5 +646,6 @@ module.exports = {
     getQuickReplies,
     createQuickReply,
     updateQuickReply,
-    deleteQuickReply
+    deleteQuickReply,
+    getAnalytics
 };

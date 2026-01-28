@@ -3,34 +3,19 @@ import axios from 'axios';
 import { BusinessAPIConfig, Tag, QuickReply } from '../types';
 import { API_URL } from '../config';
 
-interface SettingsViewProps {
-  businessApis: BusinessAPIConfig[];
-  currentApiId: string;
-  onAddApi: (api: BusinessAPIConfig) => void;
-  onRemoveApi: (id: string) => void;
-  onSetCurrentApi: (id: string) => void;
-  availableTags: Tag[];
-  onSetAvailableTags: React.Dispatch<React.SetStateAction<Tag[]>>;
-  quickReplies: QuickReply[];
-  onSetQuickReplies: React.Dispatch<React.SetStateAction<QuickReply[]>>;
-}
+// Zustand Stores
+import { useChannelsStore, useAppStore } from '../stores';
 
 interface Toast {
   message: string;
   type: 'success' | 'info' | 'error';
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({
-  businessApis,
-  currentApiId,
-  onAddApi,
-  onRemoveApi,
-  onSetCurrentApi,
-  availableTags,
-  onSetAvailableTags,
-  quickReplies,
-  onSetQuickReplies
-}) => {
+const SettingsView: React.FC = () => {
+  // === ZUSTAND STORES ===
+  const { channels: businessApis, currentChannelId: currentApiId, addChannel, removeChannel, setCurrentChannel, fetchChannels } = useChannelsStore();
+  const { tags: availableTags, quickReplies, addTag, updateTag, removeTag: removeTagFromStore, addQuickReply, updateQuickReply, removeQuickReply: removeQRFromStore, fetchTags, fetchQuickReplies, setTags, setQuickReplies } = useAppStore();
+
   const [isAddingApi, setIsAddingApi] = useState(false);
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
@@ -48,45 +33,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     fetchTags();
     fetchQuickReplies();
   }, []);
-
-  const fetchChannels = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/channels`);
-      // Update parent state with channels from DB
-      res.data.forEach((ch: any) => {
-        if (!businessApis.find(a => a.id === ch.id)) {
-          onAddApi({
-            id: ch.id,
-            name: ch.name,
-            phoneNumber: ch.phoneNumber,
-            phoneId: ch.phoneId,
-            accessToken: ch.accessToken,
-            status: 'connected'
-          });
-        }
-      });
-    } catch (e) {
-      console.error("Error fetching channels", e);
-    }
-  };
-
-  const fetchTags = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/tags`);
-      onSetAvailableTags(res.data);
-    } catch (e) {
-      console.error("Error fetching tags", e);
-    }
-  };
-
-  const fetchQuickReplies = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/quickreplies`);
-      onSetQuickReplies(res.data);
-    } catch (e) {
-      console.error("Error fetching quick replies", e);
-    }
-  };
 
   const colors = [
     'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500',
@@ -114,7 +60,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       const res = await axios.post(`${API_URL}/channels`, payload);
       const created = res.data;
 
-      onAddApi({
+      addChannel({
         id: created.id,
         name: created.name,
         phoneNumber: created.phoneNumber,
@@ -135,7 +81,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     if (!confirm('¿Estás seguro de eliminar esta línea de WhatsApp?')) return;
     try {
       await axios.delete(`${API_URL}/channels/${id}`);
-      onRemoveApi(id);
+      removeChannel(id);
       showToast('Línea eliminada', 'info');
     } catch (error) {
       console.error(error);
@@ -153,13 +99,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           name: tagForm.name,
           color: tagForm.color
         });
-        onSetAvailableTags(prev => prev.map(t => t.id === editingTagId ? res.data : t));
+        updateTag(res.data);
       } else {
         const res = await axios.post(`${API_URL}/tags`, {
           name: tagForm.name,
           color: tagForm.color || 'bg-gray-500'
         });
-        onSetAvailableTags(prev => [...prev, res.data]);
+        addTag(res.data);
       }
       setTagModalOpen(false);
       setEditingTagId(null);
@@ -174,7 +120,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const removeTag = async (id: string) => {
     try {
       await axios.delete(`${API_URL}/tags/${id}`);
-      onSetAvailableTags(prev => prev.filter(t => t.id !== id));
+      removeTagFromStore(id);
       showToast("Etiqueta eliminada", "info");
     } catch (error) {
       console.error(error);
@@ -200,13 +146,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           shortcut: cleanShortcut,
           content: qrForm.content
         });
-        onSetQuickReplies(prev => prev.map(qr => qr.id === editingQRId ? res.data : qr));
+        updateQuickReply(res.data);
       } else {
         const res = await axios.post(`${API_URL}/quickreplies`, {
           shortcut: cleanShortcut,
           content: qrForm.content
         });
-        onSetQuickReplies(prev => [...prev, res.data]);
+        addQuickReply(res.data);
       }
       setQrModalOpen(false);
       setEditingQRId(null);
@@ -221,7 +167,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const removeQR = async (id: string) => {
     try {
       await axios.delete(`${API_URL}/quickreplies/${id}`);
-      onSetQuickReplies(prev => prev.filter(q => q.id !== id));
+      removeQRFromStore(id);
       showToast("Atajo eliminado", "info");
     } catch (error) {
       console.error(error);
@@ -272,7 +218,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     </div>
                   </div>
                   <div className="flex space-x-1">
-                    <button onClick={() => onSetCurrentApi(api.id)} disabled={api.id === currentApiId} className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-green-600 transition-colors disabled:text-green-500">
+                    <button onClick={() => setCurrentChannel(api.id)} disabled={api.id === currentApiId} className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-green-600 transition-colors disabled:text-green-500">
                       <i className="fa-solid fa-circle-check"></i>
                     </button>
                     <button onClick={() => handleRemoveApiInternal(api.id)} className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors">

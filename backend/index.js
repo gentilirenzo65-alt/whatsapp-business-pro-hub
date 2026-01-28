@@ -58,6 +58,10 @@ const { sequelize } = require('./models');
 // Import scheduler
 const Scheduler = require('./services/scheduler');
 const broadcastService = require('./services/broadcastService');
+const backupService = require('./services/backup');
+
+// Backup interval: 24 hours in milliseconds
+const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 // Sync Database and Start Server
 sequelize.sync().then(() => {
@@ -67,12 +71,24 @@ sequelize.sync().then(() => {
     const scheduler = new Scheduler(broadcastService);
     scheduler.start();
 
+    // Run initial backup on startup
+    console.log('📦 Sistema de Backups: Iniciando...');
+    backupService.runBackup();
+
+    // Schedule backups every 24 hours
+    setInterval(() => {
+        backupService.runBackup();
+    }, BACKUP_INTERVAL_MS);
+
+    console.log(`📦 Backups Automáticos: Cada 24 horas`);
+
     server.listen(PORT, () => {
         console.log(`🚀 Server is running on port ${PORT}`);
         console.log(`- Local: http://localhost:${PORT}`);
         console.log(`- Webhook Endpoint: http://localhost:${PORT}/webhook`);
         console.log(`- Socket.io: Enabled`);
         console.log(`- Scheduler: Active (cada 60s)`);
+        console.log(`- Backups: Auto (cada 24h) - Dir: ${backupService.BACKUP_DIR}`);
     });
 }).catch(err => {
     console.error('❌ Error al conectar con la Base de Datos:', err);

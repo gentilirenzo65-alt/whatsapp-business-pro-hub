@@ -72,4 +72,33 @@ router.post('/quickreplies', apiController.createQuickReply);
 router.put('/quickreplies/:id', apiController.updateQuickReply);
 router.delete('/quickreplies/:id', apiController.deleteQuickReply);
 
+// Analytics
+router.get('/analytics', apiController.getAnalytics);
+
+// Backup Routes
+const backupService = require('../services/backup');
+
+router.get('/backups', (req, res) => {
+    const backups = backupService.listBackups();
+    res.json({
+        count: backups.length,
+        backups,
+        backupDir: backupService.BACKUP_DIR
+    });
+});
+
+router.post('/backups', async (req, res) => {
+    try {
+        const success = await backupService.runBackup();
+        if (success) {
+            res.json({ success: true, message: 'Backup creado exitosamente' });
+        } else {
+            res.status(500).json({ success: false, message: 'Error al crear backup' });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 module.exports = router;
+

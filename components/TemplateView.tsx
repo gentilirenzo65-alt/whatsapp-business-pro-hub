@@ -1,18 +1,19 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Template } from '../types';
 import axios from 'axios';
 import { API_URL } from '../config';
 
-interface TemplateViewProps {
-  templates: Template[];
-  onUpdateTemplates: React.Dispatch<React.SetStateAction<Template[]>>;
-}
+// Zustand Store
+import { useTemplatesStore } from '../stores';
 
-const TemplateView: React.FC<TemplateViewProps> = ({ templates, onUpdateTemplates }) => {
+const TemplateView: React.FC = () => {
+  // === ZUSTAND STORE ===
+  const { templates, fetchTemplates, addTemplate, updateTemplate, removeTemplate } = useTemplatesStore();
+
+  // Local UI state
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [isImproving, setIsImproving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -26,18 +27,9 @@ const TemplateView: React.FC<TemplateViewProps> = ({ templates, onUpdateTemplate
   });
 
   // FETCH TEMPLATES ON MOUNT
-  React.useEffect(() => {
+  useEffect(() => {
     fetchTemplates();
   }, []);
-
-  const fetchTemplates = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/templates`);
-      onUpdateTemplates(res.data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   const handleSaveEdit = async () => {
     if (!editingTemplate) return;
@@ -51,7 +43,7 @@ const TemplateView: React.FC<TemplateViewProps> = ({ templates, onUpdateTemplate
         language: editingTemplate.language
       });
 
-      onUpdateTemplates(prev => prev.map(t => t.id === editingTemplate.id ? editingTemplate : t));
+      updateTemplate(editingTemplate);
       setEditingTemplate(null);
     } catch (error: any) {
       console.error(error);
@@ -77,7 +69,7 @@ const TemplateView: React.FC<TemplateViewProps> = ({ templates, onUpdateTemplate
       const res = await axios.post(`${API_URL}/templates`, payload);
       const created = res.data;
 
-      onUpdateTemplates(prev => [created, ...prev]);
+      addTemplate(created);
       setIsCreating(false);
       setNewTemplateForm({ name: '', category: 'UTILITY', content: '', language: 'es', status: 'PENDING' });
 
@@ -94,10 +86,7 @@ const TemplateView: React.FC<TemplateViewProps> = ({ templates, onUpdateTemplate
     }
   };
 
-  // AI improvement disabled - Gemini service removed
-  const handleImproveContent = async (isEditing: boolean) => {
-    alert('La mejora con IA no está disponible. El servicio Gemini fue deshabilitado.');
-  };
+
 
   const insertVariable = (num: number, isEditing: boolean) => {
     const variable = `{{${num}}}`;
@@ -122,12 +111,12 @@ const TemplateView: React.FC<TemplateViewProps> = ({ templates, onUpdateTemplate
     }, 0);
   };
 
-  const deleteTemplate = async (id: string) => {
+  const handleDeleteTemplate = async (id: string) => {
     if (!confirm('¿Estás seguro de eliminar esta plantilla? Esta acción no se puede deshacer.')) return;
 
     try {
       await axios.delete(`${API_URL}/templates/${id}`);
-      onUpdateTemplates(prev => prev.filter(t => t.id !== id));
+      removeTemplate(id);
     } catch (error: any) {
       console.error(error);
       alert(`Error al eliminar plantilla: ${error.response?.data?.error || error.message}`);
@@ -187,7 +176,7 @@ const TemplateView: React.FC<TemplateViewProps> = ({ templates, onUpdateTemplate
                 Ver / Editar
               </button>
               <button
-                onClick={() => deleteTemplate(template.id)}
+                onClick={() => handleDeleteTemplate(template.id)}
                 className="w-12 h-12 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-[18px] transition-colors"
                 title="Eliminar de Meta"
               >
@@ -272,20 +261,24 @@ const TemplateView: React.FC<TemplateViewProps> = ({ templates, onUpdateTemplate
                       ))}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleImproveContent(!isCreating)}
-                    disabled={isImproving}
-                    className="text-[10px] font-black text-green-600 hover:text-green-800 flex items-center uppercase tracking-widest bg-green-50 px-4 py-2 rounded-xl transition-colors disabled:opacity-50 border border-green-100 shadow-sm"
-                  >
-                    <i className={`fa-solid ${isImproving ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'} mr-2`}></i>
-                    Pulir con IA
-                  </button>
+                  {/* Character Counter */}
+                  <div className="text-right">
+                    <span className={`text-[10px] font-black ${((isCreating ? newTemplateForm.content : editingTemplate?.content) || '').length > 1024
+                        ? 'text-red-500'
+                        : ((isCreating ? newTemplateForm.content : editingTemplate?.content) || '').length > 900
+                          ? 'text-orange-500'
+                          : 'text-gray-400'
+                      }`}>
+                      {((isCreating ? newTemplateForm.content : editingTemplate?.content) || '').length} / 1024
+                    </span>
+                    <p className="text-[8px] text-gray-300 uppercase">caracteres</p>
+                  </div>
                 </div>
 
                 <div className="relative">
                   <textarea
                     ref={textareaRef}
-                    rows={6}
+                    rows={5}
                     className="w-full bg-gray-50 border-2 border-transparent rounded-3xl p-6 font-medium text-gray-800 focus:border-green-500 transition-all shadow-inner resize-none"
                     placeholder="Escribe tu mensaje... Hola {{1}}, gracias por..."
                     value={isCreating ? newTemplateForm.content : editingTemplate?.content}
@@ -294,6 +287,34 @@ const TemplateView: React.FC<TemplateViewProps> = ({ templates, onUpdateTemplate
                       : setEditingTemplate({ ...editingTemplate!, content: e.target.value })
                     }
                   />
+                </div>
+
+                {/* Live Preview */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                      <i className="fa-solid fa-eye mr-1"></i> Vista Previa
+                    </label>
+                    <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">EN VIVO</span>
+                  </div>
+                  <div className="bg-[#dcf8c6] rounded-2xl p-5 border border-green-200 shadow-sm relative">
+                    <div className="absolute -top-2 right-4 bg-white px-2 py-0.5 rounded text-[8px] font-black text-gray-400 uppercase border">
+                      WhatsApp Preview
+                    </div>
+                    <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">
+                      {((isCreating ? newTemplateForm.content : editingTemplate?.content) || 'Tu mensaje aparecerá aquí...')
+                        .split(/(\{\{\d+\}\})/)
+                        .map((part, idx) =>
+                          /\{\{\d+\}\}/.test(part)
+                            ? <span key={idx} className="bg-green-600 text-white px-1.5 py-0.5 rounded font-bold text-xs mx-0.5">{part}</span>
+                            : part
+                        )}
+                    </p>
+                    <div className="flex items-center justify-end mt-3 text-[10px] text-gray-500">
+                      <span>12:00</span>
+                      <i className="fa-solid fa-check-double ml-1 text-blue-500"></i>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

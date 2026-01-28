@@ -61,7 +61,29 @@ const Contact = sequelize.define('Contact', {
     },
     notes: {
         type: DataTypes.TEXT
+    },
+    // === CRM FIELDS ===
+    email: {
+        type: DataTypes.STRING,
+        validate: { isEmail: true }
+    },
+    birthday: {
+        type: DataTypes.DATEONLY // Solo fecha, sin hora
+    },
+    company: {
+        type: DataTypes.STRING
+    },
+    customFields: {
+        type: DataTypes.JSON, // Para campos dinámicos adicionales
+        defaultValue: {}
     }
+}, {
+    // INDEXES for optimized queries
+    indexes: [
+        { fields: ['lastActive'] },       // Fast sorting for chat list
+        { fields: ['phone'] },            // Fast phone lookup
+        { fields: ['assigned_agent_id'] } // Fast agent filtering
+    ]
 });
 
 // --- MESSAGE MODEL (Chats) ---
@@ -92,6 +114,14 @@ const Message = sequelize.define('Message', {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW
     }
+}, {
+    // INDEXES for optimized queries on large datasets
+    indexes: [
+        { fields: ['contact_id'] },                    // Fast lookup by contact
+        { fields: ['timestamp'] },                     // Fast sorting by date
+        { fields: ['contact_id', 'timestamp'] },       // Combined for chat history
+        { fields: ['status'] }                         // Fast filtering by status
+    ]
 });
 
 // --- TEMPLATE MODEL (Plantillas) ---
