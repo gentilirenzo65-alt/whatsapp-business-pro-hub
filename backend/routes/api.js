@@ -40,6 +40,7 @@ router.put('/contacts/:id', apiController.updateContact);
 router.get('/channels', channelController.getChannels);
 router.post('/channels', channelController.createChannel);
 router.delete('/channels/:id', channelController.deleteChannel);
+router.post('/channels/test', channelController.testChannel); // New Test Endpoint
 
 // Mensajes
 router.get('/messages/:contactId', apiController.getMessages);

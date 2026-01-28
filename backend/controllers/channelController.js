@@ -49,8 +49,32 @@ const deleteChannel = async (req, res) => {
     }
 };
 
+// POST /api/channels/test
+const testChannel = async (req, res) => {
+    const { phoneId, accessToken } = req.body;
+
+    if (!phoneId || !accessToken) {
+        return res.status(400).json({ error: 'Phone ID y Access Token son requeridos' });
+    }
+
+    try {
+        const whatsappService = require('../services/whatsappService');
+        const result = await whatsappService.verifyCredentials(phoneId, accessToken);
+
+        if (result.success) {
+            res.json(result);
+        } else {
+            res.status(401).json(result);
+        }
+    } catch (error) {
+        console.error('Error testing channel:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
 module.exports = {
     getChannels,
     createChannel,
-    deleteChannel
+    deleteChannel,
+    testChannel
 };

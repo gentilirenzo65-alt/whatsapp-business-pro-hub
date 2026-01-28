@@ -368,7 +368,33 @@ const SettingsView: React.FC = () => {
               <input type="text" placeholder="Phone ID (Meta)" className="w-full bg-gray-100 rounded-xl p-4 text-xs font-mono" value={newApi.phoneId} onChange={e => setNewApi({ ...newApi, phoneId: e.target.value })} />
               <input type="password" placeholder="Access Token (Meta)" className="w-full bg-gray-100 rounded-xl p-4 text-xs font-mono" value={newApi.accessToken} onChange={e => setNewApi({ ...newApi, accessToken: e.target.value })} />
 
-              <button onClick={handleAddApi} className="w-full bg-green-600 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg mt-4">Vincular Canal</button>
+              <div className="flex space-x-3 mt-4">
+                <button
+                  onClick={async () => {
+                    if (!newApi.phoneId || !newApi.accessToken) return showToast('Ingresa Phone ID y Token para probar', 'info');
+                    const toastId = 'testing'; // Simple ID
+                    showToast('Probando conexión con Meta...', 'info');
+
+                    try {
+                      await axios.post(`${API_URL}/channels/test`, {
+                        phoneId: newApi.phoneId,
+                        accessToken: newApi.accessToken
+                      });
+                      showToast('✅ Conexión Exitosa. Credenciales válidas.', 'success');
+                    } catch (error: any) {
+                      console.error(error);
+                      showToast(`❌ Error: ${error.response?.data?.error || 'Falló la conexión'}`, 'error');
+                    }
+                  }}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors flex items-center justify-center"
+                >
+                  <i className="fa-solid fa-flask mr-2"></i> Probar Conexión
+                </button>
+
+                <button onClick={handleAddApi} className="flex-1 bg-green-600 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg hover:bg-green-700 transition-colors">
+                  Vincular Canal
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -415,6 +415,50 @@ class WhatsAppService {
             return { success: false, error: error.response?.data?.error?.message || error.message };
         }
     }
+
+    // -------------------------------------------------------------
+    // VERIFICACIÓN DE CREDENCIALES
+    // -------------------------------------------------------------
+    async verifyCredentials(phoneId, accessToken) {
+        console.log(`🔍 Verificando credenciales para Phone ID: ${phoneId}`);
+        const axios = require('axios');
+
+        try {
+            // Call Meta API to get Phone Number details
+            // GET /{phone-number-id}
+            const url = `https://graph.facebook.com/v17.0/${phoneId}`;
+
+            const response = await axios.get(url, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            // If successful, check if the ID matches (sanity check)
+            if (response.data.id === phoneId) {
+                console.log('✅ Credenciales Válidas. Nombre en Meta:', response.data.display_phone_number);
+                return {
+                    success: true,
+                    data: {
+                        display_phone_number: response.data.display_phone_number,
+                        quality_rating: response.data.quality_rating,
+                        verified_name: response.data.verified_name
+                    }
+                };
+            } else {
+                return { success: false, error: 'El ID devuelto por Meta no coincide.' };
+            }
+
+        } catch (error) {
+            console.error('❌ Error verificando credenciales:', error.response ? error.response.data : error.message);
+            const metaError = error.response?.data?.error?.message || error.message;
+
+            // User friendly error mapping
+            let userError = metaError;
+            if (metaError.includes('Invalid OAuth access token')) userError = 'Token de acceso inválido o expirado.';
+            if (metaError.includes('Unsupported get request')) userError = 'Phone ID incorrecto o no existe.';
+
+            return { success: false, error: userError };
+        }
+    }
 }
 
 module.exports = new WhatsAppService();
