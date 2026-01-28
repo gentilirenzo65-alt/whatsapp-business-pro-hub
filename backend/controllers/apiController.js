@@ -1,4 +1,8 @@
-const { Contact, Message, Template, Tag, QuickReply, sequelize } = require('../models');
+const { Contact, Message, Template, Tag, QuickReply, sequelize, Broadcast, Channel } = require('../models');
+const { Op } = require('sequelize');
+const axios = require('axios');
+const fs = require('fs');
+const FormData = require('form-data');
 const whatsappService = require('../services/whatsappService');
 const broadcastService = require('../services/broadcastService');
 
@@ -392,10 +396,8 @@ const sendMediaMessage = async (req, res) => {
         const contact = await Contact.findByPk(contactId);
         if (!contact) return res.status(404).json({ error: 'Contact not found' });
 
-        const axios = require('axios');
-        const fs = require('fs');
-        const FormData = require('form-data');
-        const { Channel } = require('../models');
+        // Imports moved to top
+
 
         // Get credentials
         let token = process.env.META_ACCESS_TOKEN;
@@ -493,8 +495,8 @@ const sendMediaMessage = async (req, res) => {
 // GET /api/analytics
 const getAnalytics = async (req, res) => {
     try {
-        const { Op } = require('sequelize');
-        const { Broadcast } = require('../models');
+        // Imports moved to top
+
 
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());

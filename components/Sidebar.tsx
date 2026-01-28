@@ -36,8 +36,8 @@ const Sidebar: React.FC = () => {
         </NavLink>
       ))}
 
-      <div className="mt-auto pb-4">
-        {/* Profile image removed per user request */}
+      <div className="mt-auto pb-4 text-[9px] font-mono text-gray-300 select-none">
+        v1.4
       </div>
     </div>
   );
