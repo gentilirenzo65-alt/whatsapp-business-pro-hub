@@ -37,7 +37,7 @@ const Sidebar: React.FC = () => {
       ))}
 
       <div className="mt-auto pb-4 text-[9px] font-mono text-gray-300 select-none">
-        v1.4
+        v1.5
       </div>
     </div>
   );

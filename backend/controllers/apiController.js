@@ -533,10 +533,11 @@ const getAnalytics = async (req, res) => {
         const topContacts = await Contact.findAll({
             attributes: [
                 'id', 'name', 'phone', 'avatar',
-                [sequelize.literal('(SELECT COUNT(*) FROM Messages WHERE Messages.contact_id = Contact.id)'), 'messageCount']
+                [sequelize.literal('(SELECT COUNT(*) FROM Messages WHERE Messages.contact_id = Contacts.id)'), 'messageCount']
             ],
             order: [[sequelize.literal('messageCount'), 'DESC']],
-            limit: 5
+            limit: 5,
+            subQuery: false // Important for limit with includes/literals
         });
 
         // Total de contactos
