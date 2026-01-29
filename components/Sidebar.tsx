@@ -36,8 +36,8 @@ const Sidebar: React.FC = () => {
         </NavLink>
       ))}
 
-      <div className="mt-auto pb-4 text-[9px] font-mono text-gray-300 select-none">
-        v2.0
+      <div className="mt-auto pb-4 text-[10px] font-black text-gray-900 select-none">
+        v2.5
       </div>
     </div>
   );
