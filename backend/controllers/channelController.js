@@ -13,23 +13,56 @@ const getChannels = async (req, res) => {
 
 // POST /api/channels
 const createChannel = async (req, res) => {
-    const { name, phoneNumber, phoneId, accessToken } = req.body;
+    const { name, phoneNumber, phoneId, wabaId, accessToken } = req.body;
 
     if (!name || !phoneNumber || !phoneId || !accessToken) {
-        return res.status(400).json({ error: 'All fields are required' });
+        return res.status(400).json({ error: 'Nombre, Número, Phone ID y Token son requeridos' });
     }
 
     try {
+        // Check if phoneId already exists
+        const existing = await Channel.findOne({ where: { phoneId } });
+        if (existing) {
+            return res.status(409).json({ error: 'Ya existe un canal con ese Phone ID' });
+        }
+
         const newChannel = await Channel.create({
             name,
             phoneNumber,
             phoneId,
+            wabaId: wabaId || null,
             accessToken
         });
         res.json(newChannel);
     } catch (error) {
         console.error('Error creating channel:', error);
         res.status(500).json({ error: 'Failed to create channel' });
+    }
+};
+
+// PUT /api/channels/:id
+const updateChannel = async (req, res) => {
+    const { id } = req.params;
+    const { name, phoneNumber, phoneId, wabaId, accessToken } = req.body;
+
+    try {
+        const channel = await Channel.findByPk(id);
+        if (!channel) {
+            return res.status(404).json({ error: 'Canal no encontrado' });
+        }
+
+        // Update fields if provided
+        if (name) channel.name = name;
+        if (phoneNumber) channel.phoneNumber = phoneNumber;
+        if (phoneId) channel.phoneId = phoneId;
+        if (wabaId !== undefined) channel.wabaId = wabaId;
+        if (accessToken) channel.accessToken = accessToken;
+
+        await channel.save();
+        res.json(channel);
+    } catch (error) {
+        console.error('Error updating channel:', error);
+        res.status(500).json({ error: 'Failed to update channel' });
     }
 };
 
@@ -75,6 +108,7 @@ const testChannel = async (req, res) => {
 module.exports = {
     getChannels,
     createChannel,
+    updateChannel,
     deleteChannel,
     testChannel
 };

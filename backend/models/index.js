@@ -171,6 +171,10 @@ const Channel = sequelize.define('Channel', {
         allowNull: false,
         unique: true
     },
+    wabaId: {
+        type: DataTypes.STRING,
+        allowNull: true // Optional, can be auto-fetched from Meta API
+    },
     accessToken: {
         type: DataTypes.TEXT, // Token can be long
         allowNull: false

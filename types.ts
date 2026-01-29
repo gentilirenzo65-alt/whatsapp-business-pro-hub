@@ -76,6 +76,7 @@ export interface BusinessAPIConfig {
   name: string;
   phoneNumber: string;
   phoneId?: string; // Meta Phone ID
+  wabaId?: string; // WhatsApp Business Account ID
   accessToken?: string; // Meta Permanent Token
   status: 'connected' | 'disconnected';
   apiKey?: string; // keeping for backward compat if needed, but prefer accessToken

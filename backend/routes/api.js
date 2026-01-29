@@ -39,6 +39,7 @@ router.put('/contacts/:id', apiController.updateContact);
 // Gestión Canales (Múltiples Números)
 router.get('/channels', channelController.getChannels);
 router.post('/channels', channelController.createChannel);
+router.put('/channels/:id', channelController.updateChannel);
 router.delete('/channels/:id', channelController.deleteChannel);
 router.post('/channels/test', channelController.testChannel); // New Test Endpoint
 

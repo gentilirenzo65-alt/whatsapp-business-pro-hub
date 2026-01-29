@@ -13,17 +13,27 @@ interface Toast {
 
 const SettingsView: React.FC = () => {
   // === ZUSTAND STORES ===
-  const { channels: businessApis, currentChannelId: currentApiId, addChannel, removeChannel, setCurrentChannel, fetchChannels } = useChannelsStore();
+  const { channels: businessApis, currentChannelId: currentApiId, addChannel, updateChannel: updateChannelStore, removeChannel, setCurrentChannel, fetchChannels } = useChannelsStore();
   const { tags: availableTags, quickReplies, addTag, updateTag, removeTag: removeTagFromStore, addQuickReply, updateQuickReply, removeQuickReply: removeQRFromStore, fetchTags, fetchQuickReplies, setTags, setQuickReplies } = useAppStore();
 
-  const [isAddingApi, setIsAddingApi] = useState(false);
+  // Modal States
+  const [isChannelModalOpen, setIsChannelModalOpen] = useState(false);
+  const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [editingQRId, setEditingQRId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
 
-  const [newApi, setNewApi] = useState<Partial<BusinessAPIConfig>>({ name: '', phoneNumber: '', phoneId: '', accessToken: '' });
+  // Forms
+  const [channelForm, setChannelForm] = useState<Partial<BusinessAPIConfig>>({
+    name: '',
+    phoneNumber: '',
+    phoneId: '',
+    wabaId: '',
+    accessToken: ''
+  });
   const [tagForm, setTagForm] = useState<Partial<Tag>>({ name: '', color: 'bg-gray-500' });
   const [qrForm, setQrForm] = useState<Partial<QuickReply>>({ shortcut: '', content: '' });
 
@@ -42,42 +52,97 @@ const SettingsView: React.FC = () => {
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 4000);
   };
 
-  const handleAddApi = async () => {
-    if (!newApi.name || !newApi.phoneNumber || !newApi.phoneId || !newApi.accessToken) {
-      return showToast('Todos los campos son obligatorios', 'error');
+  // ===== CHANNEL HANDLERS =====
+  const openAddChannel = () => {
+    setEditingChannelId(null);
+    setChannelForm({ name: '', phoneNumber: '', phoneId: '', wabaId: '', accessToken: '' });
+    setIsChannelModalOpen(true);
+  };
+
+  const openEditChannel = (channel: BusinessAPIConfig) => {
+    setEditingChannelId(channel.id);
+    setChannelForm({
+      name: channel.name,
+      phoneNumber: channel.phoneNumber,
+      phoneId: channel.phoneId,
+      wabaId: channel.wabaId || '',
+      accessToken: channel.accessToken
+    });
+    setIsChannelModalOpen(true);
+  };
+
+  const handleSaveChannel = async () => {
+    if (!channelForm.name || !channelForm.phoneNumber || !channelForm.phoneId || !channelForm.accessToken) {
+      return showToast('Nombre, Número, Phone ID y Token son obligatorios', 'error');
     }
 
     try {
       const payload = {
-        name: newApi.name,
-        phoneNumber: newApi.phoneNumber,
-        phoneId: newApi.phoneId,
-        accessToken: newApi.accessToken
+        name: channelForm.name,
+        phoneNumber: channelForm.phoneNumber,
+        phoneId: channelForm.phoneId,
+        wabaId: channelForm.wabaId || null,
+        accessToken: channelForm.accessToken
       };
-      const res = await axios.post(`${API_URL}/channels`, payload);
-      const created = res.data;
 
-      addChannel({
-        id: created.id,
-        name: created.name,
-        phoneNumber: created.phoneNumber,
-        phoneId: created.phoneId,
-        accessToken: created.accessToken,
-        status: 'connected'
-      });
-      showToast(`Línea [${created.name}] conectada.`, 'success');
-      setNewApi({ name: '', phoneNumber: '', phoneId: '', accessToken: '' });
-      setIsAddingApi(false);
-    } catch (error) {
+      if (editingChannelId) {
+        // UPDATE existing channel
+        const res = await axios.put(`${API_URL}/channels/${editingChannelId}`, payload);
+        updateChannelStore({
+          ...res.data,
+          status: 'connected'
+        });
+        showToast(`Canal [${res.data.name}] actualizado.`, 'success');
+      } else {
+        // CREATE new channel
+        const res = await axios.post(`${API_URL}/channels`, payload);
+        addChannel({
+          id: res.data.id,
+          name: res.data.name,
+          phoneNumber: res.data.phoneNumber,
+          phoneId: res.data.phoneId,
+          wabaId: res.data.wabaId,
+          accessToken: res.data.accessToken,
+          status: 'connected'
+        });
+        showToast(`Canal [${res.data.name}] conectado.`, 'success');
+      }
+
+      setChannelForm({ name: '', phoneNumber: '', phoneId: '', wabaId: '', accessToken: '' });
+      setIsChannelModalOpen(false);
+      setEditingChannelId(null);
+    } catch (error: any) {
       console.error(error);
-      showToast('Error al conectar línea API', 'error');
+      const msg = error.response?.data?.error || 'Error al guardar canal';
+      showToast(msg, 'error');
     }
   };
 
-  const handleRemoveApiInternal = async (id: string) => {
+  const handleTestConnection = async () => {
+    if (!channelForm.phoneId || !channelForm.accessToken) {
+      return showToast('Ingresa Phone ID y Token para probar', 'info');
+    }
+
+    setIsTesting(true);
+    try {
+      const res = await axios.post(`${API_URL}/channels/test`, {
+        phoneId: channelForm.phoneId,
+        accessToken: channelForm.accessToken
+      });
+
+      showToast(`✅ Conexión Exitosa. Número: ${res.data.data?.display_phone_number || 'Verificado'}`, 'success');
+    } catch (error: any) {
+      console.error(error);
+      showToast(`❌ Error: ${error.response?.data?.error || 'Falló la conexión'}`, 'error');
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleRemoveChannel = async (id: string) => {
     if (!confirm('¿Estás seguro de eliminar esta línea de WhatsApp?')) return;
     try {
       await axios.delete(`${API_URL}/channels/${id}`);
@@ -89,7 +154,7 @@ const SettingsView: React.FC = () => {
     }
   };
 
-  // TAG HANDLERS - Now with API persistence
+  // ===== TAG HANDLERS =====
   const handleSaveTag = async () => {
     if (!tagForm.name) return;
 
@@ -134,7 +199,7 @@ const SettingsView: React.FC = () => {
     setTagModalOpen(true);
   };
 
-  // QUICK REPLY HANDLERS - Now with API persistence
+  // ===== QUICK REPLY HANDLERS =====
   const handleSaveQR = async () => {
     if (!qrForm.shortcut || !qrForm.content) return;
 
@@ -195,35 +260,71 @@ const SettingsView: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
 
-          {/* SECCIÓN: LÍNEAS API */}
+          {/* SECCIÓN: CANALES WHATSAPP */}
           <section className="space-y-4">
             <div className="flex justify-between items-center px-1">
               <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center">
-                <i className="fa-solid fa-plug-circle-check mr-2"></i> Líneas Conectadas
+                <i className="fa-brands fa-whatsapp mr-2 text-green-500"></i> Canales WhatsApp
               </h2>
-              <button onClick={() => setIsAddingApi(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-green-600 transition-colors">
+              <button onClick={openAddChannel} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-green-600 transition-colors">
                 <i className="fa-solid fa-plus-circle"></i>
               </button>
             </div>
             <div className="bg-white rounded-[32px] border border-gray-200 p-6 space-y-3 shadow-sm min-h-[300px]">
+              {businessApis.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-60 text-center">
+                  <i className="fa-solid fa-plug-circle-xmark text-4xl text-gray-200 mb-4"></i>
+                  <p className="text-xs text-gray-400 font-medium">No hay canales configurados</p>
+                  <p className="text-[10px] text-gray-300 mt-1">Haz clic en + para agregar tu primer número de WhatsApp</p>
+                </div>
+              )}
               {businessApis.map(api => (
-                <div key={api.id} className={`p-4 rounded-2xl border transition-all flex justify-between items-center ${api.id === currentApiId ? 'border-green-500 bg-green-50/30' : 'border-gray-50'}`}>
-                  <div className="flex items-center space-x-3 overflow-hidden">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${api.id.startsWith('meta_') ? 'bg-[#1877F2] text-white' : 'bg-gray-100 text-gray-400'}`}>
-                      <i className={api.id.startsWith('meta_') ? 'fa-brands fa-whatsapp' : 'fa-solid fa-phone text-[10px]'}></i>
+                <div key={api.id} className={`p-4 rounded-2xl border transition-all ${api.id === currentApiId ? 'border-green-500 bg-green-50/30' : 'border-gray-100 hover:border-gray-200'}`}>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center space-x-3 overflow-hidden">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shrink-0">
+                        <i className="fa-brands fa-whatsapp text-white text-lg"></i>
+                      </div>
+                      <div className="truncate">
+                        <div className="text-sm font-black text-gray-900 truncate">{api.name}</div>
+                        <div className="text-[10px] font-mono text-gray-400">{api.phoneNumber}</div>
+                      </div>
                     </div>
-                    <div className="truncate">
-                      <div className="text-xs font-black text-gray-900 truncate">{api.name}</div>
-                      <div className="text-[9px] font-mono text-gray-400">{api.phoneNumber}</div>
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => setCurrentChannel(api.id)}
+                        disabled={api.id === currentApiId}
+                        className={`w-8 h-8 flex items-center justify-center transition-colors rounded-lg ${api.id === currentApiId ? 'text-green-500 bg-green-50' : 'text-gray-300 hover:text-green-600 hover:bg-gray-50'}`}
+                        title="Usar como activo"
+                      >
+                        <i className="fa-solid fa-circle-check"></i>
+                      </button>
+                      <button
+                        onClick={() => openEditChannel(api)}
+                        className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-blue-500 hover:bg-gray-50 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <i className="fa-solid fa-pen text-[10px]"></i>
+                      </button>
+                      <button
+                        onClick={() => handleRemoveChannel(api.id)}
+                        className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-gray-50 rounded-lg transition-colors"
+                        title="Eliminar"
+                      >
+                        <i className="fa-solid fa-trash-can text-[10px]"></i>
+                      </button>
                     </div>
                   </div>
-                  <div className="flex space-x-1">
-                    <button onClick={() => setCurrentChannel(api.id)} disabled={api.id === currentApiId} className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-green-600 transition-colors disabled:text-green-500">
-                      <i className="fa-solid fa-circle-check"></i>
-                    </button>
-                    <button onClick={() => handleRemoveApiInternal(api.id)} className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors">
-                      <i className="fa-solid fa-trash-can text-[10px]"></i>
-                    </button>
+                  {/* Extra Info */}
+                  <div className="mt-3 pt-3 border-t border-gray-50 grid grid-cols-2 gap-2 text-[9px]">
+                    <div>
+                      <span className="text-gray-300 uppercase">Phone ID:</span>
+                      <span className="ml-1 font-mono text-gray-500">{api.phoneId?.slice(0, 12)}...</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-300 uppercase">WABA ID:</span>
+                      <span className="ml-1 font-mono text-gray-500">{api.wabaId ? `${api.wabaId.slice(0, 10)}...` : 'N/A'}</span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -295,8 +396,133 @@ const SettingsView: React.FC = () => {
           <div className={`px-6 py-3 rounded-2xl shadow-xl border flex items-center space-x-3 ${toast.type === 'success' ? 'bg-green-600 border-green-500 text-white' :
             toast.type === 'error' ? 'bg-red-600 border-red-500 text-white' : 'bg-gray-800 border-gray-700 text-white'
             }`}>
-            <i className="fa-solid fa-circle-info text-sm"></i>
+            <i className={`fa-solid ${toast.type === 'success' ? 'fa-circle-check' : toast.type === 'error' ? 'fa-circle-xmark' : 'fa-circle-info'} text-sm`}></i>
             <span className="text-xs font-black uppercase tracking-widest">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CANAL WHATSAPP */}
+      {isChannelModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[210] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 shadow-2xl">
+            <div className="p-6 border-b bg-gradient-to-r from-green-500 to-emerald-600 flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                  <i className="fa-brands fa-whatsapp text-white text-xl"></i>
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-white">
+                  {editingChannelId ? 'Editar Canal' : 'Nuevo Canal WhatsApp'}
+                </h3>
+              </div>
+              <button onClick={() => setIsChannelModalOpen(false)} className="text-white/70 hover:text-white transition-colors">
+                <i className="fa-solid fa-times text-lg"></i>
+              </button>
+            </div>
+
+            <div className="p-8 space-y-5">
+              {/* Nombre / Alias */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  Nombre / Alias
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Ventas Principal, Soporte..."
+                  className="w-full bg-gray-100 rounded-xl p-4 text-sm font-bold focus:ring-2 focus:ring-green-500 focus:bg-white transition-all outline-none"
+                  value={channelForm.name}
+                  onChange={e => setChannelForm({ ...channelForm, name: e.target.value })}
+                />
+              </div>
+
+              {/* Número de Teléfono */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  Número de Teléfono
+                </label>
+                <input
+                  type="text"
+                  placeholder="+54 9 264 577 8956"
+                  className="w-full bg-gray-100 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:bg-white transition-all outline-none"
+                  value={channelForm.phoneNumber}
+                  onChange={e => setChannelForm({ ...channelForm, phoneNumber: e.target.value })}
+                />
+              </div>
+
+              {/* Phone ID */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  Phone Number ID <span className="text-gray-300">(de Meta)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="960527703810768"
+                  className="w-full bg-gray-100 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:bg-white transition-all outline-none"
+                  value={channelForm.phoneId}
+                  onChange={e => setChannelForm({ ...channelForm, phoneId: e.target.value })}
+                />
+              </div>
+
+              {/* WABA ID */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  WABA ID <span className="text-gray-300">(Opcional - para plantillas)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="1336632681832004"
+                  className="w-full bg-gray-100 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:bg-white transition-all outline-none"
+                  value={channelForm.wabaId}
+                  onChange={e => setChannelForm({ ...channelForm, wabaId: e.target.value })}
+                />
+              </div>
+
+              {/* Access Token */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  Access Token <span className="text-gray-300">(Permanente)</span>
+                </label>
+                <textarea
+                  placeholder="EAAREzMEwxwcBO..."
+                  rows={3}
+                  className="w-full bg-gray-100 rounded-xl p-4 text-xs font-mono focus:ring-2 focus:ring-green-500 focus:bg-white transition-all outline-none resize-none"
+                  value={channelForm.accessToken}
+                  onChange={e => setChannelForm({ ...channelForm, accessToken: e.target.value })}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-2">
+                <button
+                  onClick={handleTestConnection}
+                  disabled={isTesting}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors flex items-center justify-center disabled:opacity-50"
+                >
+                  {isTesting ? (
+                    <>
+                      <i className="fa-solid fa-spinner fa-spin mr-2"></i> Probando...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-flask mr-2"></i> Probar Conexión
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleSaveChannel}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
+                >
+                  {editingChannelId ? 'Guardar Cambios' : 'Vincular Canal'}
+                </button>
+              </div>
+
+              {/* Help Text */}
+              <p className="text-[10px] text-gray-400 text-center pt-2">
+                <i className="fa-solid fa-circle-info mr-1"></i>
+                Obtén estos datos en <a href="https://developers.facebook.com" target="_blank" className="text-green-600 hover:underline">Meta for Developers</a>
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -349,52 +575,6 @@ const SettingsView: React.FC = () => {
                 onChange={(e) => setQrForm({ ...qrForm, content: e.target.value })}
               />
               <button onClick={handleSaveQR} className="w-full bg-yellow-500 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg">Guardar Atajo</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL AÑADIR API MANUAL */}
-      {isAddingApi && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[210] p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[32px] w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 border-b flex justify-between items-center">
-              <h3 className="text-sm font-black uppercase tracking-widest text-gray-800">Añadir Línea Manual</h3>
-              <button onClick={() => setIsAddingApi(false)} className="text-gray-400"><i className="fa-solid fa-times"></i></button>
-            </div>
-            <div className="p-8 space-y-4">
-              <input type="text" placeholder="Alias (Ej: Ventas)" className="w-full bg-gray-100 rounded-xl p-4 text-xs font-bold" value={newApi.name} onChange={e => setNewApi({ ...newApi, name: e.target.value })} />
-              <input type="text" placeholder="Número (+1 234...)" className="w-full bg-gray-100 rounded-xl p-4 text-xs font-mono" value={newApi.phoneNumber} onChange={e => setNewApi({ ...newApi, phoneNumber: e.target.value })} />
-              <input type="text" placeholder="Phone ID (Meta)" className="w-full bg-gray-100 rounded-xl p-4 text-xs font-mono" value={newApi.phoneId} onChange={e => setNewApi({ ...newApi, phoneId: e.target.value })} />
-              <input type="password" placeholder="Access Token (Meta)" className="w-full bg-gray-100 rounded-xl p-4 text-xs font-mono" value={newApi.accessToken} onChange={e => setNewApi({ ...newApi, accessToken: e.target.value })} />
-
-              <div className="flex space-x-3 mt-4">
-                <button
-                  onClick={async () => {
-                    if (!newApi.phoneId || !newApi.accessToken) return showToast('Ingresa Phone ID y Token para probar', 'info');
-                    const toastId = 'testing'; // Simple ID
-                    showToast('Probando conexión con Meta...', 'info');
-
-                    try {
-                      await axios.post(`${API_URL}/channels/test`, {
-                        phoneId: newApi.phoneId,
-                        accessToken: newApi.accessToken
-                      });
-                      showToast('✅ Conexión Exitosa. Credenciales válidas.', 'success');
-                    } catch (error: any) {
-                      console.error(error);
-                      showToast(`❌ Error: ${error.response?.data?.error || 'Falló la conexión'}`, 'error');
-                    }
-                  }}
-                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors flex items-center justify-center"
-                >
-                  <i className="fa-solid fa-flask mr-2"></i> Probar Conexión
-                </button>
-
-                <button onClick={handleAddApi} className="flex-1 bg-green-600 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg hover:bg-green-700 transition-colors">
-                  Vincular Canal
-                </button>
-              </div>
             </div>
           </div>
         </div>

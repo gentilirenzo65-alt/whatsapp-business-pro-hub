@@ -17,6 +17,7 @@ interface ChannelsState {
     fetchChannels: () => Promise<void>;
     setChannels: (channels: BusinessAPIConfig[]) => void;
     addChannel: (channel: BusinessAPIConfig) => void;
+    updateChannel: (channel: BusinessAPIConfig) => void;
     removeChannel: (id: string) => void;
     setCurrentChannel: (id: string) => void;
 }
@@ -52,6 +53,11 @@ export const useChannelsStore = create<ChannelsState>((set, get) => ({
         currentChannelId: state.currentChannelId || channel.id
     })),
 
+    // Update existing channel
+    updateChannel: (updatedChannel) => set((state) => ({
+        channels: state.channels.map(c => c.id === updatedChannel.id ? updatedChannel : c)
+    })),
+
     // Remove channel
     removeChannel: (id) => set((state) => {
         const remaining = state.channels.filter(c => c.id !== id);
@@ -66,3 +72,4 @@ export const useChannelsStore = create<ChannelsState>((set, get) => ({
     // Set current active channel
     setCurrentChannel: (id) => set({ currentChannelId: id })
 }));
+

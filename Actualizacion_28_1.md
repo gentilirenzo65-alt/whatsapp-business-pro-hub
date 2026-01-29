@@ -1,65 +1,43 @@
-# Actualización 28/1/2026
+# Actualización 28-29/1/2026
 
-## INFORMACIÓN CRÍTICA PARA LA PRÓXIMA IA
+## ✅ ESTADO FINAL: FUNCIONANDO
 
-### Estado actual del proyecto: ✅ LISTO PARA DESPLEGAR
-El error "Cannot find module 'express'" fue encontrado y corregido.
-Falta: Subir a GitHub y reinstalar en el servidor.
+El backend arranca correctamente y el webhook de Meta fue verificado exitosamente.
 
 ---
 
-## RESUMEN DE REVISIÓN COMPLETA (29/1/2026)
+# HISTORIAL COMPLETO DE LA SESIÓN 29/1/2026
 
-### Backend - ✅ CORREGIDO
-| Archivo | Estado | Notas |
-|---------|--------|-------|
-| `backend/package.json` | ✅ CORREGIDO | Faltaban: express, body-parser, cors, socket.io, sequelize |
-| `backend/Dockerfile` | ✅ OK | |
-| `backend/index.js` | ✅ OK | |
-| `backend/controllers/*` | ✅ OK | |
-| `backend/services/*` | ✅ OK | |
-| `backend/models/*` | ✅ OK | |
-| `backend/routes/*` | ✅ OK | |
-
-### Frontend - ✅ OK
-| Archivo | Estado |
-|---------|--------|
-| `package.json` | ✅ OK |
-| `App.tsx` | ✅ OK |
-| `config.ts` | ✅ OK |
-| `stores/*` | ✅ OK |
-| `components/*` | ✅ OK |
-| `Dockerfile` | ✅ OK |
-
-### Configuración - ✅ OK
-| Archivo | Estado |
-|---------|--------|
-| `docker-compose.yml` | ✅ OK |
-| `nginx.conf` | ✅ OK |
-| `vite.config.ts` | ✅ OK |
+## Problema inicial
+El usuario intentaba verificar el webhook de Meta WhatsApp API pero Meta devolvía:
+> "No se pudo validar la URL de devolución de llamada o el token de verificación"
 
 ---
 
-## ERROR CORREGIDO
+## ERROR #1: Cannot find module 'express'
 
-### Problema:
+### Síntoma:
 ```
 Error: Cannot find module 'express'
-Require stack: /app/index.js
+Require stack:
+- /app/index.js
 ```
 
-### Causa:
-El archivo `backend/package.json` NO tenía las dependencias necesarias.
+### Diagnóstico:
+Al revisar `backend/package.json` se descubrió que **faltaban dependencias críticas**:
+- express ❌
+- body-parser ❌
+- cors ❌
+- socket.io ❌
+- sequelize ❌
 
-### Solución aplicada:
-Se actualizó `backend/package.json` agregando:
-- express
-- body-parser
-- cors
-- socket.io
-- sequelize
+Solo tenía: axios, dotenv, form-data, multer, sqlite3
 
-### Dependencias actuales del backend:
+### Causa raíz:
+El archivo `backend/package.json` nunca fue actualizado cuando se agregaron nuevas librerías al código.
+
+### Solución:
+Se actualizó `backend/package.json` con todas las dependencias:
 ```json
 {
   "dependencies": {
@@ -79,17 +57,39 @@ Se actualizó `backend/package.json` agregando:
 
 ---
 
-## PRÓXIMOS PASOS
+## ERROR #2: SQLITE_CANTOPEN
 
-### 1. Subir a GitHub
-Usar GitHub Desktop para hacer commit y push de los cambios.
-
-### 2. Conectar al VPS
-```powershell
-ssh debian@158.69.193.136
+### Síntoma:
+Después de solucionar el error de express, apareció:
+```
+❌ Error al conectar con la Base de Datos: ConnectionError [SequelizeConnectionError]: SQLITE_CANTOPEN: unable to open database file
 ```
 
-### 3. Reinstalar todo limpio
+### Diagnóstico:
+El `docker-compose.yml` tenía un volumen que montaba el archivo de base de datos:
+```yaml
+volumes:
+  - ./backend/uploads:/app/uploads
+  - ./backend/database.sqlite:/app/database.sqlite  # ← ESTE ERA EL PROBLEMA
+```
+
+Esto causaba conflictos de permisos porque Docker intentaba montar un archivo que no existía o no tenía permisos correctos.
+
+### Solución:
+Se eliminó la línea del volumen de database.sqlite en `docker-compose.yml`:
+```yaml
+volumes:
+  - ./backend/uploads:/app/uploads
+  # Se eliminó: - ./backend/database.sqlite:/app/database.sqlite
+```
+
+Ahora la base de datos se crea automáticamente **dentro** del contenedor.
+
+---
+
+## Comandos de reinstalación que funcionaron
+
+### Reinstalación limpia completa:
 ```bash
 cd ~
 sudo docker stop $(sudo docker ps -aq) 2>/dev/null
@@ -101,67 +101,89 @@ cd ~/app
 cat > .env << 'EOF'
 WEBHOOK_VERIFY_TOKEN=391556
 META_PHONE_ID=676498832214498
-META_ACCESS_TOKEN=EAATqsRn7fEEBQjUAN6ZA41Oqna3ODpMkvezUoSd0ZB9FjojTf1CeT1odWNnC2lIz4O8EmA7jJS1ppilfyb1slZAvitsh38AU5mX0okECAYHZCcRCDn4PYkzwBTUK3vQwzoDXtVTq8VjwZAU6mToDgugmZBo2nMsLv3XMTmtc18wMZBJB0ziZByualpLIKJRT6E50UgZDZD
+META_ACCESS_TOKEN=EAAREzMEwxwcBQgfA17GJHeIWadasZCH4ztlVqYpppi6G0i3ayNr0cfqaZCE455vzrv6Fu05AKZAoKJHepM3Or9KZAg2K2gld9aqZCqWvZC4FKo3bB87KiftqWXVfl2DVl5fNmfZB3au9p13LNMEvCxCKVCpb5v4ZBkdZAXj3Uw5FcDjfAz94V7SBZA2fMJmtJCmXvcjQZDZD
 APP_PINS=1234,5678
 EOF
 sudo docker compose up -d --build
 ```
 
-### 4. Verificar que funcione
+### Verificar logs del backend:
 ```bash
 sudo docker compose logs app-backend --tail=20
 ```
-Debe mostrar: `🚀 Server is running on port 3000`
-
-### 5. Verificar webhook en Meta
-- URL: `https://bar.helensteward.shop/webhook`
-- Token: `391556`
 
 ---
 
-## Credenciales y Configuración
+## Resultado final exitoso
 
-### Token de Meta WhatsApp API
 ```
-EAATqsRn7fEEBQjUAN6ZA41Oqna3ODpMkvezUoSd0ZB9FjojTf1CeT1odWNnC2lIz4O8EmA7jJS1ppilfyb1slZAvitsh38AU5mX0okECAYHZCcRCDn4PYkzwBTUK3vQwzoDXtVTq8VjwZAU6mToDgugmZBo2nMsLv3XMTmtc18wMZBJB0ziZByualpLIKJRT6E50UgZDZD
+✅ Base de Datos Sincronizada (Tablas creadas/actualizadas)
+⏰ Scheduler iniciado - Revisando broadcasts programados cada minuto...
+📦 Sistema de Backups: Iniciando...
+📦 Backups Automáticos: Cada 24 horas
+🚀 Server is running on port 3000
+- Local: http://localhost:3000
+- Webhook Endpoint: http://localhost:3000/webhook
+- Socket.io: Enabled
+- Scheduler: Active (cada 60s)
+- Backups: Auto (cada 24h) - Dir: /app/backups
+✅ SQLite backup created: backup_2026-01-29T19-52-39.sqlite
+✅ Backup completed successfully
 ```
 
-### META_PHONE_ID
+---
+
+# CREDENCIALES ACTUALES (29/1/2026)
+
+## Token de Meta WhatsApp API (NUEVO)
+```
+EAAREzMEwxwcBQgfA17GJHeIWadasZCH4ztlVqYpppi6G0i3ayNr0cfqaZCE455vzrv6Fu05AKZAoKJHepM3Or9KZAg2K2gld9aqZCqWvZC4FKo3bB87KiftqWXVfl2DVl5fNmfZB3au9p13LNMEvCxCKVCpb5v4ZBkdZAXj3Uw5FcDjfAz94V7SBZA2fMJmtJCmXvcjQZDZD
+```
+
+## META_PHONE_ID
 ```
 676498832214498
 ```
 
-### Webhook de Meta
+## Webhook de Meta - ✅ VERIFICADO
 - **URL:** `https://bar.helensteward.shop/webhook`
 - **Token de verificación:** `391556`
 
-### Conexión VPS
+## Conexión VPS
 - **IP:** 158.69.193.136
 - **Usuario:** debian
 - **Comando SSH:** `ssh debian@158.69.193.136`
 
+## Archivo .env en el servidor
+```
+WEBHOOK_VERIFY_TOKEN=391556
+META_PHONE_ID=676498832214498
+META_ACCESS_TOKEN=EAAREzMEwxwcBQgfA17GJHeIWadasZCH4ztlVqYpppi6G0i3ayNr0cfqaZCE455vzrv6Fu05AKZAoKJHepM3Or9KZAg2K2gld9aqZCqWvZC4FKo3bB87KiftqWXVfl2DVl5fNmfZB3au9p13LNMEvCxCKVCpb5v4ZBkdZAXj3Uw5FcDjfAz94V7SBZA2fMJmtJCmXvcjQZDZD
+APP_PINS=1234,5678
+```
+
 ---
 
-## Configuración de Cloudflare
+# CONFIGURACIÓN DE CLOUDFLARE
 
-### Subdominio: bar.helensteward.shop
+## Subdominio: bar.helensteward.shop
 - **Proxy:** Activado (nube naranja)
 - **SSL:** Funciona correctamente
 
-### Regla de seguridad creada:
+## Regla de seguridad creada:
 - **Nombre:** Permitir Webhook Meta
 - **Expresión:** `(http.request.uri.path contains "/webhook")`
 - **Acción:** Skip (todas las protecciones)
 
 ---
 
-## Arquitectura de la App
+# ARQUITECTURA DE LA APP
 
-### Contenedores Docker:
+## Contenedores Docker:
 1. **app-backend** - Node.js + Express (puerto 3000)
 2. **app-frontend** - Nginx sirviendo React/Vite (puerto 80)
 
-### Rutas Nginx:
+## Rutas Nginx:
 | Ruta | Destino |
 |------|---------|
 | `/` | Frontend (archivos estáticos) |
@@ -172,12 +194,89 @@ EAATqsRn7fEEBQjUAN6ZA41Oqna3ODpMkvezUoSd0ZB9FjojTf1CeT1odWNnC2lIz4O8EmA7jJS1ppil
 
 ---
 
-## Historial de cambios - Sesión 29/1/2026
+# ARCHIVOS MODIFICADOS EN ESTA SESIÓN
 
-1. ✅ Se identificó error `Cannot find module 'express'`
-2. ✅ Se descubrió que `backend/package.json` faltaban dependencias
-3. ✅ Se corrigió `backend/package.json`
-4. ✅ Se actualizó versión en `Sidebar.tsx` de v1.5 a v2.0
-5. ✅ Se configuró regla en Cloudflare para permitir webhook
-6. ✅ Se revisó TODA la app (backend, frontend, docker, nginx)
-7. ⏳ PENDIENTE: Subir a GitHub y reinstalar en VPS
+1. **`backend/package.json`** - Se agregaron dependencias faltantes
+2. **`docker-compose.yml`** - Se eliminó el volumen de database.sqlite
+3. **`components/Sidebar.tsx`** - Se actualizó versión de v1.5 a v2.0
+4. **`backend/.env`** - Se actualizó token de verificación a 391556
+
+---
+
+# LECCIONES APRENDIDAS
+
+1. **Siempre verificar `package.json`** - Si el código usa una librería, debe estar en las dependencias
+2. **Cuidado con volúmenes de Docker** - Montar archivos que no existen causa errores de permisos
+3. **Logs son críticos** - `docker compose logs` es esencial para diagnosticar problemas
+4. **Reinstalar limpio funciona** - Cuando hay muchos problemas de cache, es mejor borrar todo y empezar de cero
+
+---
+
+# COMANDOS ÚTILES
+
+## Ver logs del backend:
+```bash
+sudo docker compose logs app-backend --tail=50
+```
+
+## Ver logs en tiempo real:
+```bash
+sudo docker compose logs -f app-backend
+```
+
+## Reiniciar solo el backend:
+```bash
+sudo docker compose restart app-backend
+```
+
+## Actualizar sin borrar todo:
+```bash
+cd ~/app
+git pull origin master
+sudo docker compose down
+sudo docker compose up -d --build
+```
+
+## Reinstalar todo desde cero:
+```bash
+cd ~
+sudo docker stop $(sudo docker ps -aq) 2>/dev/null
+sudo docker rm $(sudo docker ps -aq) 2>/dev/null
+sudo docker system prune -af
+sudo rm -rf ~/app
+git clone https://github.com/gentilirenzo65-alt/whatsapp-business-pro-hub.git ~/app
+cd ~/app
+cat > .env << 'EOF'
+WEBHOOK_VERIFY_TOKEN=391556
+META_PHONE_ID=676498832214498
+META_ACCESS_TOKEN=EAAREzMEwxwcBQgfA17GJHeIWadasZCH4ztlVqYpppi6G0i3ayNr0cfqaZCE455vzrv6Fu05AKZAoKJHepM3Or9KZAg2K2gld9aqZCqWvZC4FKo3bB87KiftqWXVfl2DVl5fNmfZB3au9p13LNMEvCxCKVCpb5v4ZBkdZAXj3Uw5FcDjfAz94V7SBZA2fMJmtJCmXvcjQZDZD
+APP_PINS=1234,5678
+EOF
+sudo docker compose up -d --build
+```
+
+---
+
+# AVANCES POSTERIORES (17:15 PM)
+
+## ✅ HITO ALCANZADO: Webhook Verificado
+El usuario confirmó que al hacer clic en "Verificar y guardar" en Meta, la acción fue exitosa y redirigió a la configuración de la API.
+**Estado del Webhook:** 🟢 ACTIVO y RESPONDIENDO.
+
+## 🔍 NUEVOS DATOS DESCUBIERTOS
+En las capturas de pantalla del usuario se identificaron nuevos identificadores asociados a la cuenta de WhatsApp Business configurada en Meta:
+- **Nuevo Phone ID:** `960527703810768` (Diferente al que estaba en el .env)
+- **WABA ID:** `1336632681832004`
+- **Número:** `+54 9 264 577 8956`
+
+## 🚀 CAMBIO DE ESTRATEGIA: Gestión desde Frontend
+Para evitar que el usuario tenga que editar código o conectarse al VPS cada vez que quiera cambiar de número o token, se decidió implementar una **Interfaz de Configuración Visual**.
+
+### Plan de Acción Inmediato:
+1. **No modificar más el backend hardcodeado** con los nuevos IDs.
+2. **Modificar `SettingsView.tsx`** para incluir un formulario donde el usuario pueda:
+   - Pegar el Token de Acceso.
+   - Pegar el Phone ID.
+   - Pegar el WABA ID.
+   - Guardar la configuración en la base de datos.
+3. Esto permitirá gestionar múltiples líneas sin intervención técnica.
