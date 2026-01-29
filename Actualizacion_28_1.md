@@ -618,3 +618,35 @@ Date:   Thu Jan 29 17:25:00 2026 -0300
     
     7 files changed, 502 insertions(+), 176 deletions(-)
 ```
+
+---
+
+# 🔄 PROCEDIMIENTO DE ACTUALIZACIÓN REALIZADO (19:40 PM - 29/1/2026)
+
+## 1. Backup Exitoso
+Se realizó una copia de seguridad de la base de datos antes de aplicar los cambios en producción.
+- **Comando Ejecutado:** `sudo docker cp $(sudo docker ps -qf "name=app-backend"):/app/database.sqlite ./backup_database_antes.sqlite`
+- **Resultado:** Archivo creado `backup_database_antes.sqlite` (129kB).
+- **Importancia:** Esto asegura que si la migración de Sequelize fallaba, se podía restaurar la BD original.
+
+## 2. Comandos de Despliegue Utilizados
+El usuario ejecutó la siguiente secuencia de comandos en el servidor para aplicar la versión 2.5:
+
+1. **Actualizar código fuente:**
+   ```bash
+   git pull origin master
+   ```
+2. **Detener contenedores (sin borrar volúmenes):**
+   ```bash
+   sudo docker compose down
+   ```
+3. **Reconstruir y levantar servicios:**
+   ```bash
+   sudo docker compose up -d --build
+   ```
+
+## 3. Verificación Final
+- **Estado:** ✅ Todo arrancó correctamente.
+- **Frontend:** Actualizado a **v2.5** (visible en el sidebar).
+- **Base de Datos:** Persistió correctamente y se agregó la columna `wabaId` sin pérdida de datos.
+- **Funcionalidad:** Verificada la gestión de canales y conexión con Meta.
