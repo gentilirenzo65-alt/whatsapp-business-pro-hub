@@ -1,7 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "WhatsApp Business Pro Hub - Backend",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -13,9 +13,14 @@
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.13.3",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
     "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "form-data": "^4.0.5",
     "multer": "^2.0.2",
+    "sequelize": "^6.37.7",
+    "socket.io": "^4.8.3",
     "sqlite3": "^5.1.7"
   }
 }
