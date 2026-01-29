@@ -650,3 +650,20 @@ El usuario ejecutó la siguiente secuencia de comandos en el servidor para aplic
 - **Frontend:** Actualizado a **v2.5** (visible en el sidebar).
 - **Base de Datos:** Persistió correctamente y se agregó la columna `wabaId` sin pérdida de datos.
 - **Funcionalidad:** Verificada la gestión de canales y conexión con Meta.
+
+## 4. Evidencia de Logs (Backend)
+```bash
+app-backend-1  | ✅ Base de Datos Sincronizada (Tablas creadas/actualizadas)
+app-backend-1  | ⏰ Scheduler iniciado - Revisando broadcasts programados cada minuto...
+app-backend-1  | 📦 Sistema de Backups: Iniciando...
+app-backend-1  | 📦 Starting database backup at 1/29/2026, 8:34:43 PM...
+app-backend-1  | 📦 Backups Automáticos: Cada 24 horas
+app-backend-1  | 🚀 Server is running on port 3000
+app-backend-1  | - Local: http://localhost:3000
+app-backend-1  | - Webhook Endpoint: http://localhost:3000/webhook
+app-backend-1  | - Socket.io: Enabled
+app-backend-1  | - Scheduler: Active (cada 60s)
+app-backend-1  | - Backups: Auto (cada 24h) - Dir: /app/backups
+app-backend-1  | ✅ SQLite backup created: backup_2026-01-29T20-34-43.sqlite
+app-backend-1  | ✅ Backup completed successfully
+```
