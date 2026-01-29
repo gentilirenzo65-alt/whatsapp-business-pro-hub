@@ -9,7 +9,6 @@ services:
       - "3000:3000"
     volumes:
       - ./backend/uploads:/app/uploads
-      - ./backend/database.sqlite:/app/database.sqlite
     environment:
       - PORT=3000
       - WEBHOOK_VERIFY_TOKEN=${WEBHOOK_VERIFY_TOKEN}
