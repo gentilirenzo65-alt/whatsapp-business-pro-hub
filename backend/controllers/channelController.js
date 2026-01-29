@@ -13,7 +13,7 @@ const getChannels = async (req, res) => {
 
 // POST /api/channels
 const createChannel = async (req, res) => {
-    const { name, phoneNumber, phoneId, wabaId, accessToken } = req.body;
+    const { name, phoneNumber, phoneId, wabaId, appSecret, accessToken } = req.body;
 
     if (!name || !phoneNumber || !phoneId || !accessToken) {
         return res.status(400).json({ error: 'Nombre, Número, Phone ID y Token son requeridos' });
@@ -31,6 +31,7 @@ const createChannel = async (req, res) => {
             phoneNumber,
             phoneId,
             wabaId: wabaId || null,
+            appSecret: appSecret || null,
             accessToken
         });
         res.json(newChannel);
@@ -43,7 +44,7 @@ const createChannel = async (req, res) => {
 // PUT /api/channels/:id
 const updateChannel = async (req, res) => {
     const { id } = req.params;
-    const { name, phoneNumber, phoneId, wabaId, accessToken } = req.body;
+    const { name, phoneNumber, phoneId, wabaId, appSecret, accessToken } = req.body;
 
     try {
         const channel = await Channel.findByPk(id);
@@ -56,6 +57,7 @@ const updateChannel = async (req, res) => {
         if (phoneNumber) channel.phoneNumber = phoneNumber;
         if (phoneId) channel.phoneId = phoneId;
         if (wabaId !== undefined) channel.wabaId = wabaId;
+        if (appSecret !== undefined) channel.appSecret = appSecret;
         if (accessToken) channel.accessToken = accessToken;
 
         await channel.save();

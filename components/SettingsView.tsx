@@ -32,8 +32,11 @@ const SettingsView: React.FC = () => {
     phoneNumber: '',
     phoneId: '',
     wabaId: '',
+    appSecret: '',
     accessToken: ''
   });
+
+
   const [tagForm, setTagForm] = useState<Partial<Tag>>({ name: '', color: 'bg-gray-500' });
   const [qrForm, setQrForm] = useState<Partial<QuickReply>>({ shortcut: '', content: '' });
 
@@ -58,7 +61,7 @@ const SettingsView: React.FC = () => {
   // ===== CHANNEL HANDLERS =====
   const openAddChannel = () => {
     setEditingChannelId(null);
-    setChannelForm({ name: '', phoneNumber: '', phoneId: '', wabaId: '', accessToken: '' });
+    setChannelForm({ name: '', phoneNumber: '', phoneId: '', wabaId: '', appSecret: '', accessToken: '' });
     setIsChannelModalOpen(true);
   };
 
@@ -69,6 +72,7 @@ const SettingsView: React.FC = () => {
       phoneNumber: channel.phoneNumber,
       phoneId: channel.phoneId,
       wabaId: channel.wabaId || '',
+      appSecret: channel.appSecret || '',
       accessToken: channel.accessToken
     });
     setIsChannelModalOpen(true);
@@ -85,6 +89,7 @@ const SettingsView: React.FC = () => {
         phoneNumber: channelForm.phoneNumber,
         phoneId: channelForm.phoneId,
         wabaId: channelForm.wabaId || null,
+        appSecret: channelForm.appSecret || null,
         accessToken: channelForm.accessToken
       };
 
@@ -105,13 +110,14 @@ const SettingsView: React.FC = () => {
           phoneNumber: res.data.phoneNumber,
           phoneId: res.data.phoneId,
           wabaId: res.data.wabaId,
+          appSecret: res.data.appSecret,
           accessToken: res.data.accessToken,
           status: 'connected'
         });
         showToast(`Canal [${res.data.name}] conectado.`, 'success');
       }
 
-      setChannelForm({ name: '', phoneNumber: '', phoneId: '', wabaId: '', accessToken: '' });
+      setChannelForm({ name: '', phoneNumber: '', phoneId: '', wabaId: '', appSecret: '', accessToken: '' });
       setIsChannelModalOpen(false);
       setEditingChannelId(null);
     } catch (error: any) {
@@ -474,6 +480,20 @@ const SettingsView: React.FC = () => {
                   className="w-full bg-gray-100 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:bg-white transition-all outline-none"
                   value={channelForm.wabaId}
                   onChange={e => setChannelForm({ ...channelForm, wabaId: e.target.value })}
+                />
+              </div>
+
+              {/* App Secret (NUEVO) */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  App Secret <span className="text-red-400">*Requerido para recibir mensajes</span>
+                </label>
+                <input
+                  type="password"
+                  placeholder="Clave secreta de la app (Meta)"
+                  className="w-full bg-gray-100 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:bg-white transition-all outline-none"
+                  value={channelForm.appSecret}
+                  onChange={e => setChannelForm({ ...channelForm, appSecret: e.target.value })}
                 />
               </div>
 

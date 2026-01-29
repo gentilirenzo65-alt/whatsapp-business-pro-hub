@@ -175,6 +175,10 @@ const Channel = sequelize.define('Channel', {
         type: DataTypes.STRING,
         allowNull: true // Optional, can be auto-fetched from Meta API
     },
+    appSecret: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
     accessToken: {
         type: DataTypes.TEXT, // Token can be long
         allowNull: false
