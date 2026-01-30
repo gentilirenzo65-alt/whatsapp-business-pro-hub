@@ -15,7 +15,7 @@ const { exec } = require('child_process');
 require('dotenv').config();
 
 const BACKUP_DIR = path.join(__dirname, '..', 'backups');
-const SQLITE_PATH = path.join(__dirname, '..', 'database.sqlite');
+const SQLITE_PATH = process.env.DB_STORAGE_PATH || path.join(__dirname, '..', 'database.sqlite');
 const RETENTION_DAYS = 7; // Keep backups for 7 days
 
 // Ensure backup directory exists
