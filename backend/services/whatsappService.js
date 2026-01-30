@@ -22,7 +22,7 @@ class WhatsAppService {
 
             // 1. Identificar o Crear Contacto
             const phone = contactData.wa_id;
-            const name = contactData.profile.name;
+            const name = contactData?.profile?.name || phone || 'Unknown';
 
             let [contact, created] = await Contact.findOrCreate({
                 where: { phone: phone },
