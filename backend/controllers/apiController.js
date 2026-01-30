@@ -446,62 +446,65 @@ const sendMediaMessage = async (req, res) => {
         formData.append('type', mimeType);
         formData.append('messaging_product', 'whatsapp');
 
-        const uploadRes = await axios.post(
-            `https://graph.facebook.com/v17.0/${phoneId}/media`,
-            formData,
-            {
-                headers: {
-                    ...formData.getHeaders(),
-                    'Authorization': `Bearer ${token}`
-                }
-            }
-        );
+        let mediaId = null, metaMessageId = null;
+        let success = false;
+        let errorDetails = null;
 
-        const mediaId = uploadRes.data.id;
-        console.log(`📤 Media uploaded to Meta: ${mediaId}`);
+        try {
+            const uploadRes = await axios.post(
+                `https://graph.facebook.com/v17.0/${phoneId}/media`,
+                formData,
+                { headers: { ...formData.getHeaders(), 'Authorization': `Bearer ${token}` } }
+            );
+            mediaId = uploadRes.data.id;
+            console.log(`📤 Media uploaded to Meta: ${mediaId}`);
 
-        // Fix for Argentina
-        let toPhone = contact.phone;
-        if (toPhone && toPhone.startsWith('549')) {
-            toPhone = toPhone.replace('549', '54');
+            // Fix for Argentina
+            let toPhone = contact.phone;
+            if (toPhone && toPhone.startsWith('549')) toPhone = toPhone.replace('549', '54');
+
+            // Step 2: Send message
+            const payload = {
+                messaging_product: 'whatsapp',
+                to: toPhone,
+                type: mediaType,
+                [mediaType]: { id: mediaId, ...(caption && mediaType !== 'audio' ? { caption } : {}) }
+            };
+
+            const sendRes = await axios.post(
+                `https://graph.facebook.com/v17.0/${phoneId}/messages`,
+                payload,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            metaMessageId = sendRes.data.messages[0].id;
+            success = true;
+            console.log(`✅ Media message sent: ${metaMessageId}`);
+
+        } catch (apiError) {
+            console.error('❌ Error sending media to Meta:', apiError.response?.data || apiError.message);
+            errorDetails = apiError.response?.data || apiError.message;
         }
 
-        // Step 2: Send message with media
-        const payload = {
-            messaging_product: 'whatsapp',
-            to: toPhone,
-            type: mediaType,
-            [mediaType]: {
-                id: mediaId,
-                ...(caption && mediaType !== 'audio' ? { caption } : {})
-            }
-        };
-
-        const sendRes = await axios.post(
-            `https://graph.facebook.com/v17.0/${phoneId}/messages`,
-            payload,
-            { headers: { 'Authorization': `Bearer ${token}` } }
-        );
-
-        const metaMessageId = sendRes.data.messages[0].id;
-        console.log(`✅ Media message sent: ${metaMessageId}`);
-
-        // Save to DB
+        // Save to DB (Always)
         const newMessage = await Message.create({
-            id: metaMessageId,
+            id: metaMessageId || `failed_${Date.now()}`,
             direction: 'outbound',
             type: mediaType,
             body: caption || `[${mediaType.toUpperCase()}]`,
             media_url: `/uploads/media/${file.filename}`,
-            status: 'sent',
+            status: success ? 'sent' : 'failed',
             timestamp: new Date(),
             contact_id: contactId
         });
 
+        if (!success) {
+            return res.status(500).json({ error: 'Failed to send media', details: errorDetails, message: newMessage });
+        }
+
         res.json(newMessage);
 
     } catch (error) {
-        console.error('Error sending media:', error.response?.data || error.message);
+        console.error('Critical Error sending media:', error);
         res.status(500).json({ error: 'Failed to send media' });
     }
 };

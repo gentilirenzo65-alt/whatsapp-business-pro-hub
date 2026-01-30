@@ -923,3 +923,16 @@ El sistema estaba diseñado para no guardar en la Base de Datos si la API de Met
 - **Persistencia de Errores (`apiController.js`):** Ahora, si un mensaje falla al enviarse, **SE GUARDA IGUALMENTE** en la base de datos, pero marcado con estado **`failed`** (Fallido).
 - **Beneficio:** El mensaje permanecerá en el historial (probablemente en rojo o con indicador de error) y no desaparecerá al recargar la página, permitiendo al usuario saber qué falló.
 
+## 11. Unificación de Contactos Argentina (30/01/2026 - 19:00)
+
+### Problema Reportado:
+El usuario notó que algunas conversaciones "se borraban" o quedaban colgadas, mientras los mensajes nuevos llegaban pero no se veían en el chat abierto.
+
+### Causa Técnica:
+WhatsApp envía los números de Argentina con el prefijo `549...`, pero muchos usuarios (y el propio sistema al enviar) usan `54...`.
+Esto provocaba que el sistema detectara dos números distintos para la misma persona, creando un "contacto duplicado" invisible donde llegaban los mensajes nuevos, fragmentando la historia.
+
+### Solución Implementada:
+- **Lógica de Normalización Inteligente (`whatsappService.js`):** Al recibir un mensaje, el sistema ahora verifica variantes del número (con y sin '9').
+- **Resultado:** Si llega un mensaje desde `549...`, el sistema es capaz de encontrar y usar el contacto existente `54...`, manteniendo toda la conversación en un solo hilo coherente.
+

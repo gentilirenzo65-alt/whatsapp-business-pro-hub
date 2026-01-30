@@ -581,7 +581,13 @@ const ChatView: React.FC<ChatViewProps> = ({
                       <span className="text-[9px] text-gray-500 font-bold">
                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      {msg.isMine && <i className={`fa-solid fa-check-double text-[9px] ${msg.status === 'read' ? 'text-blue-500' : 'text-gray-400'}`}></i>}
+                      {msg.isMine && (
+                        msg.status === 'failed' ? (
+                          <i className="fa-solid fa-circle-exclamation text-[10px] text-red-500 animate-pulse" title="Error al enviar (Token vencido o fallo de red)"></i>
+                        ) : (
+                          <i className={`fa-solid fa-check-double text-[9px] ${msg.status === 'read' ? 'text-blue-500' : 'text-gray-400'}`}></i>
+                        )
+                      )}
                     </div>
                   </div>
                 </div>
