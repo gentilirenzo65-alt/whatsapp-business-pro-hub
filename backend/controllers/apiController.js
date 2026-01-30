@@ -417,20 +417,24 @@ const sendMediaMessage = async (req, res) => {
         // Imports moved to top
 
 
-        // Get credentials
-        let token = process.env.META_ACCESS_TOKEN;
-        let phoneId = process.env.META_PHONE_ID;
+        // STRICT: Get credentials ONLY from Channel
+        let token = null;
+        let phoneId = null;
 
         if (channelId) {
             const channel = await Channel.findByPk(channelId);
             if (channel) {
                 token = channel.accessToken;
                 phoneId = channel.phoneId;
+            } else {
+                return res.status(404).json({ error: 'Channel not found in DB' });
             }
+        } else {
+            return res.status(400).json({ error: 'channelId is required for strict mode' });
         }
 
         if (!token || !phoneId) {
-            return res.status(400).json({ error: 'No credentials available' });
+            return res.status(400).json({ error: 'Channel credentials missing in DB. Update Channel Settings.' });
         }
 
         // Determine media type from mimetype

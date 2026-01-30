@@ -87,16 +87,15 @@ class WhatsAppService {
             // 5. TRIGGER BACKGROUND MEDIA DOWNLOAD (Non-blocking)
             if (['image', 'audio', 'document', 'video', 'sticker'].includes(messageData.type)) {
 
-                // Determine token
-                let token = process.env.META_ACCESS_TOKEN;
-                if (channel && channel.accessToken) {
-                    token = channel.accessToken;
-                }
+                // STRICT: Only use Channel Token from Database
+                const token = channel?.accessToken;
 
                 if (token) {
                     // Fire and forget - do not await
                     this._downloadMediaBackground(messageData, newMessage.id, token)
                         .catch(err => console.error('❌ Background media download failed:', err));
+                } else {
+                    console.warn(`⚠️ Media message received but NO TOKEN found for channel ${channel?.id || 'Unknown'}. Media will not be downloaded. Verify Channel Settings in CRM.`);
                 }
             }
 
@@ -196,25 +195,25 @@ class WhatsAppService {
 
         let token, phoneId;
 
-        // 1. Determine Credentials from DB
+        // 1. Determine Credentials from DB (STRICT)
         if (channelId) {
             const channel = await Channel.findByPk(channelId);
             if (channel) {
                 token = channel.accessToken;
                 phoneId = channel.phoneId;
+            } else {
+                console.error(`❌ CRITICAL: Channel ID ${channelId} not found in DB.`);
+                return { success: false, error: 'Channel not found in DB' };
             }
+        } else {
+            console.error('❌ CRITICAL: No channelId provided for sendMessage (Strict Mode).');
+            return { success: false, error: 'Channel ID required' };
         }
 
-        // 2. Fallback to Env if no channel found
+        // 2. Strict Check
         if (!token || !phoneId) {
-            console.warn('⚠️ No se especificó canal válido. Usando .env fallback.');
-            token = process.env.META_ACCESS_TOKEN;
-            phoneId = process.env.META_PHONE_ID;
-        }
-
-        if (!token || !phoneId) {
-            console.error('❌ CRITICAL: No credentials found (DB or ENV).');
-            return { success: false, error: 'No credentials available' };
+            console.error(`❌ CRITICAL: Channel ${channelId} has missing credentials in DB.`);
+            return { success: false, error: 'Channel credentials missing. Update Settings.' };
         }
 
         const axios = require('axios');
