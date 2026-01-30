@@ -66,6 +66,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showMediaMenu, setShowMediaMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [contactInfoTab, setContactInfoTab] = useState<'details' | 'media'>('details'); // New state
 
   // Typing indicators now come from appStore (managed by App.tsx)
 
@@ -92,6 +93,7 @@ const ChatView: React.FC<ChatViewProps> = ({
       setShowTagPicker(false);
       setShowContactEditor(false);
       setShowMediaMenu(false);
+      setContactInfoTab('details'); // Reset tab
       if (selectedContact) {
         setEditingContact({ ...selectedContact });
       }
@@ -104,6 +106,14 @@ const ChatView: React.FC<ChatViewProps> = ({
         axios.put(`${API_URL}/contacts/${selectedContactId}`, {
           unreadCount: 0
         }).catch(err => console.error('Error syncing unreadCount:', err));
+      }
+
+      // STICKY CHANNEL LOGIC: Switch to the channel the contact used
+      if (selectedContact && selectedContact.assignedBusinessPhone) {
+        const targetChannel = channels.find(c => c.phoneNumber === selectedContact.assignedBusinessPhone);
+        if (targetChannel && targetChannel.id !== currentChannelId) {
+          setCurrentChannel(targetChannel.id);
+        }
       }
     }
   }, [selectedContactId]); // Use ID specifically
@@ -378,20 +388,31 @@ const ChatView: React.FC<ChatViewProps> = ({
                 className={`flex items-center p-4 border-b cursor-pointer transition-all ${selectedContact?.id === contact.id ? 'bg-[#ebebeb] border-r-4 border-r-green-500' : 'hover:bg-gray-50'}`}
               >
                 <div className="relative">
-                  <img src={contact.avatar} className="w-12 h-12 rounded-full mr-3 border-2 border-white shadow-sm" alt={contact.name} />
+                  <img
+                    src={contact.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=random`}
+                    className="w-12 h-12 rounded-full mr-3 border-2 border-white shadow-sm"
+                    alt={contact.name}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(contact.name)}&background=random`;
+                    }}
+                  />
                   {contact.unreadCount > 0 && (
                     <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center">
-                    <h3 className={`truncate text-sm ${contact.unreadCount > 0 ? 'font-black text-black' : 'font-bold text-gray-900'}`}>
-                      {contact.name}
+                    <h3 className={`truncate text-sm ${contact.unreadCount > 0 ? 'font-black text-black' : 'font-bold text-gray-900'} max-w-[75%]`}>
+                      {contact.name !== 'Unknown' && contact.name !== contact.phone ? contact.name : contact.phone}
                     </h3>
-                    <span className={`text-[10px] ${contact.unreadCount > 0 ? 'text-green-600 font-black' : 'text-gray-400'}`}>Hoy</span>
+                    <span className={`text-[10px] ${contact.unreadCount > 0 ? 'text-green-600 font-black' : 'text-gray-400'}`}>
+                      {new Date(contact.lastActive).toLocaleDateString() === new Date().toLocaleDateString() ?
+                        new Date(contact.lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
+                        new Date(contact.lastActive).toLocaleDateString()}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between mt-1">
-                    <div className="flex items-center space-x-1 overflow-x-hidden">
+                    <div className="flex items-center space-x-1 overflow-x-hidden max-w-[70%]">
                       {contact.tags.map(tId => {
                         const tag = availableTags.find(at => at.id === tId);
                         return tag ? (
@@ -399,14 +420,34 @@ const ChatView: React.FC<ChatViewProps> = ({
                         ) : null;
                       })}
                       <p className={`text-xs truncate ml-1 ${contact.unreadCount > 0 ? 'font-bold text-gray-900' : 'text-gray-500'}`}>
-                        {contact.phone}
+                        {contact.name !== 'Unknown' && contact.name !== contact.phone ? contact.phone : ''}
                       </p>
                     </div>
-                    {contact.unreadCount > 0 && (
-                      <span className="bg-green-500 text-white text-[10px] font-black min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1 shadow-sm">
-                        {contact.unreadCount}
-                      </span>
-                    )}
+
+                    {/* Channel Badge & Unread Count */}
+                    <div className="flex items-center space-x-2">
+                      {/* Channel Badge - Visual Identifier */}
+                      {(() => {
+                        const ch = channels.find(c => c.phoneNumber === contact.assignedBusinessPhone);
+                        if (!ch) return null;
+                        // Generate consistent color based on char code sum
+                        const colors = ['bg-blue-100 text-blue-700', 'bg-purple-100 text-purple-700', 'bg-pink-100 text-pink-700', 'bg-orange-100 text-orange-700', 'bg-cyan-100 text-cyan-700'];
+                        const colorIndex = ch.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+                        const badgeColor = colors[colorIndex];
+
+                        return (
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter ${badgeColor} border border-black/5`}>
+                            {ch.name}
+                          </span>
+                        );
+                      })()}
+
+                      {contact.unreadCount > 0 && (
+                        <span className="bg-green-500 text-white text-[10px] font-black min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1 shadow-sm">
+                          {contact.unreadCount}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -422,7 +463,15 @@ const ChatView: React.FC<ChatViewProps> = ({
             <div className="p-3 bg-[#f0f2f5] flex items-center border-b z-30 shadow-sm">
               {/* Avatar with connection indicator */}
               <div className="relative">
-                <img src={selectedContact.avatar} className="w-10 h-10 rounded-full mr-3 border-2 border-white shadow-sm cursor-pointer" alt="" onClick={() => setShowContactEditor(true)} />
+                <img
+                  src={selectedContact.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedContact.name)}&background=random`}
+                  className="w-10 h-10 rounded-full mr-3 border-2 border-white shadow-sm cursor-pointer"
+                  alt=""
+                  onClick={() => setShowContactEditor(true)}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedContact.name)}&background=random`;
+                  }}
+                />
                 {/* Connection Status Dot */}
                 <div className={`absolute bottom-0 right-2 w-3 h-3 rounded-full border-2 border-white ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} title={isConnected ? 'Conectado' : 'Desconectado'}></div>
               </div>
@@ -524,9 +573,7 @@ const ChatView: React.FC<ChatViewProps> = ({
               {messages.map(msg => (
                 <div key={msg.id} className={`flex ${msg.isMine ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[70%] px-3 py-2 rounded-xl shadow-sm relative ${msg.isMine ? 'bg-[#dcf8c6] text-gray-800' : 'bg-white text-gray-800'}`}>
-                    <span className={`text-[8px] absolute -top-4 font-black uppercase tracking-wider ${msg.isMine ? 'right-0 text-green-700' : 'left-0 text-gray-500'}`}>
-                      {msg.isMine ? `De: ${currentApi?.phoneNumber || '...'}` : `Cliente: ${selectedContact.phone}`}
-                    </span>
+
 
                     {renderMessageContent(msg)}
 
@@ -587,102 +634,179 @@ const ChatView: React.FC<ChatViewProps> = ({
               </button>
             </div>
 
-            {/* MODAL: CONTACT EDITOR */}
+            {/* MODAL: CONTACT INFO & MEDIA */}
             {showContactEditor && (
               <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-md">
-                <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-                  <div className="p-8 border-b bg-gray-50/50 flex justify-between items-center">
-                    <div>
-                      <h3 className="text-xl font-black text-gray-800 tracking-tight uppercase">
-                        {!editingContact.id ? 'Nuevo Contacto' : 'Información de Contacto'}
-                      </h3>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                        {!editingContact.id ? 'Inicia un chat con un cliente nuevo' : 'Actualiza los datos del cliente'}
-                      </p>
+                <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+
+                  {/* Header & Tabs */}
+                  <div className="p-0 bg-gray-50/50 border-b flex flex-col">
+                    <div className="flex justify-between items-center p-6 pb-2">
+                      <div>
+                        <h3 className="text-xl font-black text-gray-800 tracking-tight uppercase">
+                          {!editingContact.id ? 'Nuevo Contacto' : 'Info del Contacto'}
+                        </h3>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                          {editingContact.name || 'Detalles'}
+                        </p>
+                      </div>
+                      <button onClick={() => setShowContactEditor(false)} className="text-gray-400 hover:text-gray-800 transition"><i className="fa-solid fa-times text-xl"></i></button>
                     </div>
-                    <button onClick={() => setShowContactEditor(false)} className="text-gray-400 hover:text-gray-800"><i className="fa-solid fa-times text-xl"></i></button>
+
+                    {/* Tabs */}
+                    {editingContact.id && (
+                      <div className="flex px-6 space-x-6 mt-2">
+                        <button
+                          onClick={() => setContactInfoTab('details')}
+                          className={`pb-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${contactInfoTab === 'details' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        >
+                          Detalles
+                        </button>
+                        <button
+                          onClick={() => setContactInfoTab('media')}
+                          className={`pb-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${contactInfoTab === 'media' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        >
+                          Archivos ({messages.filter(m => m.mediaUrl).length})
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="p-10 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                    <div className="flex flex-col items-center mb-4">
-                      <img src={editingContact.avatar || 'https://ui-avatars.com/api/?background=random&name=New'} className="w-24 h-24 rounded-full border-4 border-gray-100 shadow-lg mb-4" alt="" />
-                      {!editingContact.id && <p className="text-[10px] text-gray-400">El avatar se generará automáticamente</p>}
-                    </div>
 
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Nombre Completo</label>
-                        <input
-                          type="text"
-                          className="w-full bg-gray-100 border-none rounded-2xl p-4 font-bold text-gray-800"
-                          value={editingContact.name || ''}
-                          onChange={(e) => setEditingContact({ ...editingContact, name: e.target.value })}
-                          placeholder="Ej: Juan Pérez"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Teléfono (con código país)</label>
-                        <input
-                          type="text"
-                          className={`w-full border-none rounded-2xl p-4 font-mono font-bold ${!editingContact.id ? 'bg-white border-2 border-green-100 text-gray-800' : 'bg-gray-50 text-gray-400 cursor-not-allowed'}`}
-                          value={editingContact.phone || ''}
-                          onChange={(e) => !editingContact.id && setEditingContact({ ...editingContact, phone: e.target.value })}
-                          disabled={!!editingContact.id}
-                          placeholder="Ej: 5491112345678"
-                        />
-                        {!editingContact.id && <p className="text-[9px] text-gray-400 mt-1 ml-1">Sin espacios ni símbolos (+). Ej: 549264...</p>}
-                      </div>
+                  {/* Content */}
+                  <div className="p-8 overflow-y-auto custom-scrollbar flex-1 bg-white">
 
-                      {/* TAG SELECTION SECTION */}
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Etiquetas del Cliente</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {availableTags.map(tag => {
-                            const isSelected = (editingContact.tags || []).includes(tag.id);
-                            return (
-                              <button
-                                key={tag.id}
-                                onClick={() => toggleEditingTag(tag.id)}
-                                className={`flex items-center space-x-2 p-3 rounded-2xl border-2 transition-all ${isSelected
-                                  ? `${tag.color.replace('bg-', 'border-')} ${tag.color.replace('bg-', 'bg-')}/10 border-opacity-50`
-                                  : 'border-gray-100 bg-gray-50 hover:border-gray-200'
-                                  }`}
-                              >
-                                <div className={`w-3 h-3 rounded-full ${tag.color}`}></div>
-                                <span className={`text-[10px] font-black uppercase tracking-tighter ${isSelected ? 'text-gray-900' : 'text-gray-400'}`}>
-                                  {tag.name}
-                                </span>
-                              </button>
-                            );
-                          })}
+                    {/* TAB: DETAILS (Form) */}
+                    {(contactInfoTab === 'details' || !editingContact.id) && (
+                      <div className="space-y-6">
+                        <div className="flex flex-col items-center mb-4">
+                          <img
+                            src={editingContact.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(editingContact.name || 'New')}&background=random`}
+                            className="w-24 h-24 rounded-full border-4 border-gray-100 shadow-lg mb-4"
+                            alt=""
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(editingContact.name || 'New')}&background=random`;
+                            }}
+                          />
+                          {!editingContact.id && <p className="text-[10px] text-gray-400">El avatar se generará automáticamente</p>}
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Nombre Completo</label>
+                            <input
+                              type="text"
+                              className="w-full bg-gray-100 border-none rounded-2xl p-4 font-bold text-gray-800"
+                              value={editingContact.name || ''}
+                              onChange={(e) => setEditingContact({ ...editingContact, name: e.target.value })}
+                              placeholder="Ej: Juan Pérez"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Teléfono (con código país)</label>
+                            <input
+                              type="text"
+                              className={`w-full border-none rounded-2xl p-4 font-mono font-bold ${!editingContact.id ? 'bg-white border-2 border-green-100 text-gray-800' : 'bg-gray-50 text-gray-400 cursor-not-allowed'}`}
+                              value={editingContact.phone || ''}
+                              onChange={(e) => !editingContact.id && setEditingContact({ ...editingContact, phone: e.target.value })}
+                              disabled={!!editingContact.id}
+                              placeholder="Ej: 5491112345678"
+                            />
+                            {!editingContact.id && <p className="text-[9px] text-gray-400 mt-1 ml-1">Sin espacios ni símbolos (+). Ej: 549264...</p>}
+                          </div>
+
+                          {/* TAG SELECTION SECTION */}
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Etiquetas del Cliente</label>
+                            <div className="grid grid-cols-2 gap-2">
+                              {availableTags.map(tag => {
+                                const isSelected = (editingContact.tags || []).includes(tag.id);
+                                return (
+                                  <button
+                                    key={tag.id}
+                                    onClick={() => toggleEditingTag(tag.id)}
+                                    className={`flex items-center space-x-2 p-3 rounded-2xl border-2 transition-all ${isSelected
+                                      ? `${tag.color.replace('bg-', 'border-')} ${tag.color.replace('bg-', 'bg-')}/10 border-opacity-50`
+                                      : 'border-gray-100 bg-gray-50 hover:border-gray-200'
+                                      }`}
+                                  >
+                                    <div className={`w-3 h-3 rounded-full ${tag.color}`}></div>
+                                    <span className={`text-[10px] font-black uppercase tracking-tighter ${isSelected ? 'text-gray-900' : 'text-gray-400'}`}>
+                                      {tag.name}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Notas Internas (Opcional)</label>
+                            <textarea
+                              className="w-full bg-gray-100 border-none rounded-2xl p-4 font-medium text-gray-800 text-sm"
+                              rows={2}
+                              placeholder="Información adicional..."
+                              value={editingContact.notes || ''}
+                              onChange={(e) => setEditingContact({ ...editingContact, notes: e.target.value })}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col space-y-3 pt-4">
+                          <button
+                            onClick={saveContactChanges}
+                            className="w-full py-4 bg-green-600 text-white rounded-[20px] font-black uppercase tracking-widest shadow-xl shadow-green-100 hover:bg-green-700 active:scale-95 transition"
+                          >
+                            {!editingContact.id ? 'Crear Contacto' : 'Guardar Cambios'}
+                          </button>
                         </div>
                       </div>
+                    )}
 
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Notas Internas (Opcional)</label>
-                        <textarea
-                          className="w-full bg-gray-100 border-none rounded-2xl p-4 font-medium text-gray-800 text-sm"
-                          rows={2}
-                          placeholder="Información adicional..."
-                          value={editingContact.notes || ''}
-                          onChange={(e) => setEditingContact({ ...editingContact, notes: e.target.value })}
-                        />
+                    {/* TAB: MEDIA GALLERY */}
+                    {contactInfoTab === 'media' && editingContact.id && (
+                      <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                        {messages.filter(m => m.mediaUrl).length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                            <i className="fa-solid fa-images text-4xl mb-3 opacity-20"></i>
+                            <p className="text-xs font-bold uppercase">No hay archivos compartidos</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-3 gap-2">
+                            {messages.filter(m => m.mediaUrl).map(m => (
+                              <div key={m.id} className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden border border-gray-100 group cursor-pointer hover:shadow-md transition">
+                                {m.mediaType === 'image' ? (
+                                  <img src={m.mediaUrl || ''} className="w-full h-full object-cover" alt="Shared" />
+                                ) : m.mediaType === 'video' ? (
+                                  <video src={m.mediaUrl || ''} className="w-full h-full object-cover" />
+                                ) : m.mediaType === 'audio' ? (
+                                  <div className="w-full h-full flex flex-col items-center justify-center bg-yellow-50 text-yellow-600">
+                                    <i className="fa-solid fa-music text-2xl mb-1"></i>
+                                    <span className="text-[8px] font-black uppercase">Audio</span>
+                                  </div>
+                                ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center bg-blue-50 text-blue-600">
+                                    <i className="fa-solid fa-file-alt text-2xl mb-1"></i>
+                                    <span className="text-[8px] font-black uppercase">Doc</span>
+                                  </div>
+                                )}
+
+                                {/* Hover Overlay */}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                  <a href={m.mediaUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-white hover:scale-110 transition">
+                                    <i className="fa-solid fa-download"></i>
+                                  </a>
+                                </div>
+
+                                {/* Timestamp Badge */}
+                                <span className="absolute bottom-1 right-1 bg-black/50 text-white text-[8px] px-1 rounded backdrop-blur-sm">
+                                  {new Date(m.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-
-                    <div className="flex flex-col space-y-3 pt-4">
-                      <button
-                        onClick={saveContactChanges}
-                        className="w-full py-5 bg-green-600 text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-100 hover:bg-green-700 active:scale-95 transition"
-                      >
-                        {!editingContact.id ? 'Crear Contacto' : 'Guardar Cambios'}
-                      </button>
-                      <button
-                        onClick={() => setShowContactEditor(false)}
-                        className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center py-2"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -79,6 +79,6 @@ export interface BusinessAPIConfig {
   wabaId?: string; // WhatsApp Business Account ID
   appSecret?: string; // App Secret para validación de webhooks
   accessToken?: string; // Meta Permanent Token
-  status: 'connected' | 'disconnected';
+  status: 'connected' | 'disconnected' | 'DISCONNECTED' | 'BANNED';
   apiKey?: string; // keeping for backward compat if needed, but prefer accessToken
 }

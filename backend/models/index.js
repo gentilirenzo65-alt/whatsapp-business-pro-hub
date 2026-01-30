@@ -184,7 +184,7 @@ const Channel = sequelize.define('Channel', {
         allowNull: false
     },
     status: {
-        type: DataTypes.ENUM('CONNECTED', 'DISCONNECTED'),
+        type: DataTypes.ENUM('CONNECTED', 'DISCONNECTED', 'BANNED'),
         defaultValue: 'CONNECTED'
     }
 });

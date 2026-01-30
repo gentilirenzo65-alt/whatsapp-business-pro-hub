@@ -16,6 +16,7 @@ interface MessagesState {
     fetchMessages: (contactId: string) => Promise<void>;
     addMessage: (contactId: string, message: Message) => void;
     updateMessageStatus: (messageId: string, status: string) => void;
+    updateMessage: (messageId: string, updates: Partial<Message>) => void; // New action
     clearCache: () => void;
     hasMessages: (contactId: string) => boolean;
 }
@@ -70,6 +71,21 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
         for (const contactId in newState) {
             newState[contactId] = newState[contactId].map(m =>
                 m.id === messageId ? { ...m, status: status as Message['status'] } : m
+            );
+        }
+
+        return { messagesByContact: newState };
+    }),
+
+    // Update any message property (e.g. media_url)
+    updateMessage: (messageId, updates) => set((state) => {
+        const newState = { ...state.messagesByContact };
+
+        // Search in all contacts (or if contactId is known, optimize)
+        // If updates contains contact_id, we can optimize, but for now generic search is safer
+        for (const contactId in newState) {
+            newState[contactId] = newState[contactId].map(m =>
+                m.id === messageId ? { ...m, ...updates } : m
             );
         }
 

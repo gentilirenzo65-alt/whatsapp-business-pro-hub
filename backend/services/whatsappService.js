@@ -41,76 +41,6 @@ class WhatsAppService {
             // 2. Lógica de "Opt-out" (Legal)
             const textBody = this._extractText(messageData);
 
-            // MEDIA HANDLING - Download and save locally
-            let mediaUrl = null;
-            if (['image', 'audio', 'document', 'video', 'sticker'].includes(messageData.type)) {
-                const mediaId = messageData[messageData.type].id;
-                const mediaType = messageData.type;
-
-                // Get token for fetching media
-                let token = process.env.META_ACCESS_TOKEN;
-                if (channel && channel.accessToken) {
-                    token = channel.accessToken;
-                }
-
-                if (token) {
-                    try {
-                        const axios = require('axios');
-                        const fs = require('fs');
-                        const path = require('path');
-
-                        // Step 1: Get media info (contains the real download URL)
-                        const mediaInfoRes = await axios.get(`https://graph.facebook.com/v17.0/${mediaId}`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-
-                        const metaMediaUrl = mediaInfoRes.data.url;
-                        const mimeType = mediaInfoRes.data.mime_type || 'application/octet-stream';
-
-                        // Step 2: Download the actual file
-                        const mediaRes = await axios.get(metaMediaUrl, {
-                            headers: { 'Authorization': `Bearer ${token}` },
-                            responseType: 'arraybuffer'
-                        });
-
-                        // Step 3: Determine file extension
-                        const extMap = {
-                            'image/jpeg': '.jpg',
-                            'image/png': '.png',
-                            'image/webp': '.webp',
-                            'audio/ogg': '.ogg',
-                            'audio/mpeg': '.mp3',
-                            'video/mp4': '.mp4',
-                            'application/pdf': '.pdf',
-                            'image/webp': '.webp'
-                        };
-                        const ext = extMap[mimeType] || '.bin';
-
-                        // Step 4: Save to /uploads/media/
-                        const filename = `${mediaId}${ext}`;
-                        const uploadDir = path.join(__dirname, '..', 'uploads', 'media');
-                        const filepath = path.join(uploadDir, filename);
-
-                        // Ensure directory exists
-                        if (!fs.existsSync(uploadDir)) {
-                            fs.mkdirSync(uploadDir, { recursive: true });
-                        }
-
-                        fs.writeFileSync(filepath, mediaRes.data);
-
-                        // Store local URL (relative to server)
-                        mediaUrl = `/uploads/media/${filename}`;
-                        console.log(`📎 Media guardada localmente: ${mediaUrl}`);
-
-                    } catch (mediaError) {
-                        console.error('Error downloading media:', mediaError.message);
-                        mediaUrl = `[MEDIA_ERROR:${mediaId}]`;
-                    }
-                } else {
-                    mediaUrl = `[MEDIA_ID:${mediaId}]`;
-                }
-            }
-
             if (textBody && textBody.toUpperCase() === 'BAJA') {
                 contact.tags = [...(contact.tags || []), 'BLOCKED_OPTOUT'];
                 await contact.save({ transaction });
@@ -119,13 +49,13 @@ class WhatsAppService {
                 return;
             }
 
-            // 3. Guardar Mensaje en DB
+            // 3. Guardar Mensaje en DB (INITIAL SAVE - FAST)
             const newMessage = await Message.create({
                 id: messageData.id,
                 direction: 'inbound',
                 type: messageData.type,
                 body: textBody,
-                media_url: mediaUrl, // Store Media URL/ID
+                media_url: null, // Will be updated in background
                 status: 'delivered',
                 contact_id: contact.id,
                 channelId: channel ? channel.id : null,
@@ -135,17 +65,11 @@ class WhatsAppService {
             // 4. Actualizar contacto
             contact.lastActive = new Date();
             contact.unreadCount = (contact.unreadCount || 0) + 1;
-
-            // Update Preview for Media
-            if (mediaUrl) {
-                // contact.lastMessage = `[${messageData.type.toUpperCase()}]`; // Option to store snippet
-            }
-
             await contact.save({ transaction });
 
             await transaction.commit();
 
-            // REAL-TIME UPDATE
+            // REAL-TIME UPDATE (Immediate feedback)
             if (global.io) {
                 global.io.emit('new_message', newMessage);
                 global.io.emit('contact_update', contact);
@@ -153,12 +77,103 @@ class WhatsAppService {
 
             console.log(`✅ Mensaje guardado de ${name} [Canal: ${channel?.name || 'Unknown'}]: ${textBody || '[' + messageData.type + ']'}`);
 
+            // 5. TRIGGER BACKGROUND MEDIA DOWNLOAD (Non-blocking)
+            if (['image', 'audio', 'document', 'video', 'sticker'].includes(messageData.type)) {
+
+                // Determine token
+                let token = process.env.META_ACCESS_TOKEN;
+                if (channel && channel.accessToken) {
+                    token = channel.accessToken;
+                }
+
+                if (token) {
+                    // Fire and forget - do not await
+                    this._downloadMediaBackground(messageData, newMessage.id, token)
+                        .catch(err => console.error('❌ Background media download failed:', err));
+                }
+            }
+
             return newMessage;
 
         } catch (error) {
             await transaction.rollback();
             console.error('❌ Error handling message:', error);
             throw error;
+        }
+    }
+
+    // NEW: Background Media Downloader
+    async _downloadMediaBackground(messageData, messageId, token) {
+        const mediaId = messageData[messageData.type].id;
+        const axios = require('axios');
+        const fs = require('fs');
+        const path = require('path');
+        const { Message } = require('../models'); // Re-import to ensure scope
+
+        try {
+            console.log(`📥 Iniciando descarga de media en segundo plano: ${mediaId}`);
+
+            // Step 1: Get media info
+            const mediaInfoRes = await axios.get(`https://graph.facebook.com/v17.0/${mediaId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const metaMediaUrl = mediaInfoRes.data.url;
+            const mimeType = mediaInfoRes.data.mime_type || 'application/octet-stream';
+
+            // Step 2: Download file
+            const mediaRes = await axios.get(metaMediaUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                responseType: 'arraybuffer'
+            });
+
+            // Step 3: Determine extension
+            const extMap = {
+                'image/jpeg': '.jpg',
+                'image/png': '.png',
+                'image/webp': '.webp',
+                'audio/ogg': '.ogg',
+                'audio/mpeg': '.mp3',
+                'video/mp4': '.mp4',
+                'application/pdf': '.pdf',
+                'image/webp': '.webp'
+            };
+            const ext = extMap[mimeType] || '.bin';
+
+            // Step 4: Save to disk
+            const filename = `${mediaId}${ext}`;
+            const uploadDir = path.join(__dirname, '..', 'uploads', 'media');
+            const filepath = path.join(uploadDir, filename);
+
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+
+            fs.writeFileSync(filepath, mediaRes.data);
+
+            const localMediaUrl = `/uploads/media/${filename}`;
+            console.log(`📎 Media descargada y guardada: ${localMediaUrl}`);
+
+            // Step 5: Update Database
+            const msg = await Message.findByPk(messageId);
+            if (msg) {
+                msg.media_url = localMediaUrl;
+                await msg.save();
+
+                // Step 6: Emit Update Event to Frontend
+                if (global.io) {
+                    global.io.emit('message_update', {
+                        id: messageId,
+                        media_url: localMediaUrl,
+                        // Include other fields if necessary, but partial update is usually handled by id
+                        contact_id: msg.contact_id // Helpful for stores to find where to update
+                    });
+                }
+            }
+
+        } catch (error) {
+            console.error(`❌ Error downloading media ${mediaId} in background:`, error.message);
+            // Optionally update message with error status
         }
     }
     // -------------------------------------------------------------

@@ -285,14 +285,29 @@ const SettingsView: React.FC = () => {
                 </div>
               )}
               {businessApis.map(api => (
-                <div key={api.id} className={`p-4 rounded-2xl border transition-all ${api.id === currentApiId ? 'border-green-500 bg-green-50/30' : 'border-gray-100 hover:border-gray-200'}`}>
+                <div key={api.id} className={`p-4 rounded-2xl border transition-all ${api.status === 'DISCONNECTED' || api.status === 'BANNED'
+                    ? 'border-red-500 bg-red-50/50 shadow-red-100 shadow-lg'
+                    : api.id === currentApiId
+                      ? 'border-green-500 bg-green-50/30'
+                      : 'border-gray-100 hover:border-gray-200'
+                  }`}>
                   <div className="flex justify-between items-center">
                     <div className="flex items-center space-x-3 overflow-hidden">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shrink-0">
-                        <i className="fa-brands fa-whatsapp text-white text-lg"></i>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${api.status === 'DISCONNECTED' || api.status === 'BANNED'
+                          ? 'bg-red-500 text-white'
+                          : 'bg-gradient-to-br from-green-400 to-green-600 text-white'
+                        }`}>
+                        <i className={`fa-brands ${api.status === 'DISCONNECTED' || api.status === 'BANNED' ? 'fa-triangle-exclamation' : 'fa-whatsapp'} text-lg`}></i>
                       </div>
                       <div className="truncate">
-                        <div className="text-sm font-black text-gray-900 truncate">{api.name}</div>
+                        <div className="flex items-center space-x-2">
+                          <div className="text-sm font-black text-gray-900 truncate">{api.name}</div>
+                          {(api.status === 'DISCONNECTED' || api.status === 'BANNED') && (
+                            <span className="bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest">
+                              {api.status}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] font-mono text-gray-400">{api.phoneNumber}</div>
                       </div>
                     </div>

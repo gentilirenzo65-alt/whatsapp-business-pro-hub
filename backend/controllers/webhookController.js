@@ -120,11 +120,43 @@ const receiveWebhook = async (req, res) => {
                 await whatsappService.handleIncomingMessage(messageData, contactData, metadata);
             }
 
-            // Handle status updates (delivered, read, failed)
+            // Handle message status updates (delivered, read, failed)
             if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.statuses) {
                 const statuses = body.entry[0].changes[0].value.statuses;
                 for (const statusData of statuses) {
                     await handleStatusUpdate(statusData);
+                }
+            }
+
+            // 5. HANDLE CRITICAL ACCOUNT ALERTS (Bans / Restrictions)
+            // Meta sometimes sends these in the same webhook structure but with different fields
+            if (body.entry && body.entry[0].changes && body.entry[0].changes[0].field === 'account_update') {
+                const alertValue = body.entry[0].changes[0].value;
+                const phoneId = body.entry[0].id || (body.entry[0].changes[0].value.metadata ? body.entry[0].changes[0].value.metadata.phone_number_id : null);
+
+                console.error(`🚨 CRITICAL ACCOUNT UPDATE for PhoneID ${phoneId}:`, JSON.stringify(alertValue));
+
+                // Alert Type Detection
+                let issueType = 'UNKNOWN';
+                if (alertValue.ban_info) issueType = 'BANNED';
+                if (alertValue.restriction_info) issueType = 'RESTRICTED';
+
+                // Emit CRITICAL event to Frontend
+                if (global.io) {
+                    global.io.emit('channel_issue', {
+                        phoneId: phoneId,
+                        type: issueType, // 'BANNED', 'RESTRICTED', 'QUALITY_LOW'
+                        details: alertValue
+                    });
+                }
+
+                // Update Channel Status in DB to 'DISCONNECTED' or 'BANNED' if possible
+                if (phoneId) {
+                    const channel = await Channel.findOne({ where: { phoneId } });
+                    if (channel) {
+                        channel.status = 'DISCONNECTED'; // Or add a new ENUM 'BANNED' later
+                        await channel.save();
+                    }
                 }
             }
 
