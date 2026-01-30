@@ -27,8 +27,29 @@ services:
     depends_on:
       - app-backend
     networks:
+    networks:
+      - whatsapp-hub-network
+
+  # n8n Service (Workflow Automation)
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=n8n.helensteward.shop
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://n8n.helensteward.shop/
+      - GENERIC_TIMEZONE=America/Argentina/Buenos_Aires
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
       - whatsapp-hub-network
 
 networks:
   whatsapp-hub-network:
     driver: bridge
+
+volumes:
+  n8n_data:
