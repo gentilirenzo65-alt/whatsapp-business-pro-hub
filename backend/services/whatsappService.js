@@ -24,16 +24,23 @@ class WhatsAppService {
             const phone = contactData.wa_id;
             const name = contactData?.profile?.name || phone || 'Unknown';
 
-            let [contact, created] = await Contact.findOrCreate({
-                where: { phone: phone },
-                defaults: {
+            let contact = await Contact.findOne({ where: { phone: phone }, transaction });
+
+            // Fix Duplication for Argentina (549 vs 54)
+            if (!contact && phone.startsWith('549')) {
+                const altPhone = phone.replace('549', '54');
+                contact = await Contact.findOne({ where: { phone: altPhone }, transaction });
+            }
+
+            if (!contact) {
+                contact = await Contact.create({
+                    phone: phone,
                     name: name,
                     avatar: '',
                     assigned_agent_id: null,
                     tags: []
-                },
-                transaction
-            });
+                }, { transaction });
+            }
 
             // Link contact to channel if we want strict segmentation later, 
             // currently contacts are global but we could tag 'Source: Ventas'
