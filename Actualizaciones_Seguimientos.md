@@ -846,4 +846,34 @@ El usuario necesitaba un aviso inmediato e imposible de ignorar si Meta bloquea 
 - **Base de Datos:** 🟢 SINCRONIZADA y con backup automático al inicio.
 - **Versión Desplegada:** `v2.5.2`
 
-La aplicación está actualizada y corriendo con las nuevas funciones de Alertas Críticas y Sticky Channel.
+
+---
+
+## 7. Persistencia de Datos (Docker Volumes)
+
+### Problema:
+Al actualizar la aplicación con Docker (`docker compose up -d --build`), el contenedor se destruía y recreaba, borrando la base de datos interna (`database.sqlite`) y perdiendo configuraciones y chats.
+
+### Solución Implementada:
+- **Volumen Persistente:** Se configuró un volumen en `docker-compose.yml` que mapea la carpeta del host `./backend/data` a `/app/data` en el contenedor.
+- **Configuración Dinámica:** Se actualizó `database.js` y `backup.js` para usar la ruta persistente definida en la variable de entorno `DB_STORAGE_PATH`.
+- **Migración:** Se movió la base de datos existente a la carpeta segura.
+
+**Resultado:** Ahora se puede actualizar, reiniciar o borrar el contenedor sin perder ni una sola línea de chat o configuración.
+
+---
+
+# ESTADO FINAL DE LA SESIÓN (30/1/2026 - 17:30 PM)
+
+## Resumen de Logros:
+1.  **Estabilidad del Webhook:** Solucionado el problema de timeouts mediante descargas en background.
+2.  **Experiencia de Usuario:** Avatares automáticos, Galería multimedia, Sticky Channel y limpieza visual.
+3.  **Seguridad y Alertas:** Sistema de detección intantánea de bloqueos/bans de Meta con avisos en pantalla.
+4.  **Infraestructura:** Implementación de persistencia de datos real a prueba de actualizaciones.
+
+## Verificación Final:
+- **Servidor:** 🟢 ONLINE y respondiendo.
+- **Base de Datos:** 🟢 PERSISTENTE y con backups automáticos funcionando.
+- **Frontend:** 🟢 v2.5.2 Desplegado y operativo.
+
+**PROYECTO LISTO Y ESTABILIZADO.**

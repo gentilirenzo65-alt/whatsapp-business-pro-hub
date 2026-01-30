@@ -8,7 +8,13 @@ const path = require('path');
 // Configure multer for media uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '..', 'uploads', 'media'));
+        const uploadPath = path.join(__dirname, '..', 'uploads', 'media');
+        // Ensure directory exists
+        const fs = require('fs');
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
         const uniqueName = `${Date.now()}_${file.originalname}`;
