@@ -279,8 +279,43 @@ const ChatView: React.FC<ChatViewProps> = ({
       case 'image':
         return (
           <div className="space-y-2">
-            <img src={msg.mediaUrl} alt="Attached" className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition shadow-inner border border-gray-100" />
-            {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
+            {msg.mediaUrl ? (
+              <div className="relative group">
+                <img
+                  src={msg.mediaUrl.startsWith('http') ? msg.mediaUrl : `${BACKEND_URL}${msg.mediaUrl}`}
+                  alt="Imagen"
+                  className="rounded-lg max-w-[280px] w-full h-auto object-cover cursor-pointer hover:brightness-95 transition shadow-sm border border-gray-100"
+                  onClick={() => window.open(msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `${BACKEND_URL}${msg.mediaUrl}`, '_blank')}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    target.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+
+                {/* Fallback for broken image */}
+                <div className="hidden w-full h-32 bg-gray-100 rounded-lg flex-col items-center justify-center text-gray-400 p-4 border border-dashed border-gray-300">
+                  <i className="fa-regular fa-image-slash text-2xl mb-2"></i>
+                  <span className="text-xs text-center">Imagen no disponible</span>
+                </div>
+
+                {/* Hover overlay hint */}
+                <div className="absolute inset-0 bg-black/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                  <i className="fa-solid fa-expand text-white Drop-shadow-md"></i>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300 flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-400">
+                  <i className="fa-solid fa-spinner fa-spin"></i>
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-gray-500">Procesando imagen...</p>
+                  <p className="text-[9px] text-gray-400">Si tarda mucho, revise el Token.</p>
+                </div>
+              </div>
+            )}
+            {msg.text && <p className="text-sm leading-normal text-gray-700 mt-1">{msg.text}</p>}
           </div>
         );
       case 'audio':
