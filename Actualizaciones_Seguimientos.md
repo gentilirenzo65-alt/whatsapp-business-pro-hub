@@ -830,3 +830,20 @@ El usuario necesitaba un aviso inmediato e imposible de ignorar si Meta bloquea 
 - `components/SettingsView.tsx`: Visualización de estado crítico de líneas.
 - `App.tsx`: Sistema de Alertas Globales (Sticky Alerts).
 - `components/Sidebar.tsx`: Actualización de indicador de versión.
+
+---
+
+# DESPLIEGUE EN VPS (30/1/2026 - 17:15 PM)
+
+## Procedimiento Realizado:
+1.  **Backup de Seguridad:** Se realizó una copia de la base de datos `database.sqlite` en el VPS antes de actualizar (`backup_antes_v2.5.2.sqlite`).
+2.  **Actualización de Código:** Se hizo `git pull origin master` para bajar la versión **v2.5.2**.
+3.  **Reconstrucción de Contenedores:** Se ejecutó `docker compose up -d --build` para actualizar tanto Backend como Frontend.
+
+## Estado Final:
+- **Backend:** 🟢 ONLINE (Puerto 3000). Logs limpios.
+- **Frontend:** 🟢 ONLINE (Puerto 80).
+- **Base de Datos:** 🟢 SINCRONIZADA y con backup automático al inicio.
+- **Versión Desplegada:** `v2.5.2`
+
+La aplicación está actualizada y corriendo con las nuevas funciones de Alertas Críticas y Sticky Channel.

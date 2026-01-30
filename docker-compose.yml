@@ -9,12 +9,14 @@ services:
       - "3000:3000"
     volumes:
       - ./backend/uploads:/app/uploads
+      - ./backend/data:/app/data
     environment:
       - PORT=3000
       - WEBHOOK_VERIFY_TOKEN=${WEBHOOK_VERIFY_TOKEN}
       - META_PHONE_ID=${META_PHONE_ID}
       - META_ACCESS_TOKEN=${META_ACCESS_TOKEN}
       - APP_PINS=${APP_PINS}
+      - DB_STORAGE_PATH=/app/data/database.sqlite
     networks:
       - whatsapp-hub-network
 

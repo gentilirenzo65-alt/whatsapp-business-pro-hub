@@ -16,7 +16,7 @@ const sequelize = isPostgres
     })
     : new Sequelize({
         dialect: 'sqlite',
-        storage: path.join(__dirname, '../database.sqlite'), // Local file
+        storage: process.env.DB_STORAGE_PATH || path.join(__dirname, '../database.sqlite'), // Local file or Docker volume path
         logging: false
     });
 
