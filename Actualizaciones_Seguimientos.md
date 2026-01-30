@@ -911,3 +911,15 @@ Error en logs: `Session has expired on Friday, 30-Jan-26 13:00:00 PST`.
 ### ACCIÓN REQUERIDA POR EL USUARIO:
 ⚠️ **Debe generar un nuevo Token de Acceso en Meta (o usar un Token de Sistema permanente) y actualizarlo en la configuración del Canal dentro de la App.** Sin esto, los mensajes salientes seguirán fallando por "Token Expirado".
 
+## 10. Corrección de Persistencia de Mensajes Fallidos (30/01/2026 - 18:45)
+
+### Problema Reportado:
+Al refrescar el CRM, los mensajes que habían fallado al enviarse (por token vencido) desaparecían de la conversación, dando la sensación de "pérdida de datos".
+
+### Causa Técnica:
+El sistema estaba diseñado para no guardar en la Base de Datos si la API de Meta devolvía error, para evitar "mentir" sobre el estado del envío.
+
+### Solución Implementada:
+- **Persistencia de Errores (`apiController.js`):** Ahora, si un mensaje falla al enviarse, **SE GUARDA IGUALMENTE** en la base de datos, pero marcado con estado **`failed`** (Fallido).
+- **Beneficio:** El mensaje permanecerá en el historial (probablemente en rojo o con indicador de error) y no desaparecerá al recargar la página, permitiendo al usuario saber qué falló.
+
