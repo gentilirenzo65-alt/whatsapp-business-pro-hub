@@ -894,4 +894,20 @@ El usuario no podía enviar imágenes o archivos multimedia desde la interfaz ("
 - **Nginx (`nginx.conf`):** Se aumentó el límite de subida a **50MB** (`client_max_body_size 50M`) tanto para la App como para n8n.
 - **Infraestructura:** Se aseguró la existencia de las carpetas mediante `.gitkeep` y creación dinámica.
 
-**Estado:** Ahora es posible adjuntar y enviar imágenes, videos y documentos sin errores de servidor.
+## 9. Diagnóstico de Fallo de Envío (30/01/2026 - 18:00)
+
+### Síntoma:
+Los mensajes salientes (del CRM hacia WhatsApp) empezaron a fallar o demorar, y las imágenes no se enviaban.
+Los mensajes entrantes (de WhatsApp al CRM) seguían funcionando.
+
+### Causa Raíz Detectada (Logs):
+El **Token de Acceso de Meta** configurado en el canal expiró.
+Error en logs: `Session has expired on Friday, 30-Jan-26 13:00:00 PST`.
+
+### Solución Implementada:
+1.  **Backend (`whatsappService.js`):** Se corrigió un error crítico que haría crashear el webhook si entraba un contacto sin nombre (`TypeError`).
+2.  **Manejo de Errores (`apiController.js`):** Ahora el sistema reportará el error real de Meta al frontend en lugar de fingir que el mensaje se envió.
+
+### ACCIÓN REQUERIDA POR EL USUARIO:
+⚠️ **Debe generar un nuevo Token de Acceso en Meta (o usar un Token de Sistema permanente) y actualizarlo en la configuración del Canal dentro de la App.** Sin esto, los mensajes salientes seguirán fallando por "Token Expirado".
+

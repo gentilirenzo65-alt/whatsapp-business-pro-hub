@@ -60,6 +60,13 @@ const sendMessage = async (req, res) => {
 
         const sendResult = await whatsappService.sendMessage(contact.phone, text, type, mediaUrl, req.body.channelId);
 
+        if (!sendResult.success) {
+            return res.status(500).json({
+                error: 'Failed to send message via WhatsApp API',
+                details: sendResult.error
+            });
+        }
+
         const newMessage = await Message.create({
             id: sendResult.messageId || `out_${Date.now()}`,
             direction: 'outbound',
