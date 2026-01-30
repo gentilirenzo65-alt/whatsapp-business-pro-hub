@@ -27,7 +27,6 @@ services:
     depends_on:
       - app-backend
     networks:
-    networks:
       - whatsapp-hub-network
 
   # n8n Service (Workflow Automation)
