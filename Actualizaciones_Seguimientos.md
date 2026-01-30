@@ -877,3 +877,21 @@ Al actualizar la aplicación con Docker (`docker compose up -d --build`), el con
 - **Frontend:** 🟢 v2.5.2 Desplegado y operativo.
 
 **PROYECTO LISTO Y ESTABILIZADO.**
+
+---
+
+## 8. Corrección de Envío Multimedia
+
+### Problema Reportado:
+El usuario no podía enviar imágenes o archivos multimedia desde la interfaz ("el mensaje llega, pero si quiero enviar imágenes no se puede").
+
+### Causas Detectadas:
+1.  **Directorio de Subida Faltante:** La carpeta `backend/uploads/media` no existía, causando error en el módulo `multer`.
+2.  **Límite de Nginx:** La configuración por defecto de Nginx limitaba los archivos a 1MB.
+
+### Solución Implementada:
+- **Backend (`routes/api.js`):** Se añadió verificación automática para crear la carpeta de destino si no existe.
+- **Nginx (`nginx.conf`):** Se aumentó el límite de subida a **50MB** (`client_max_body_size 50M`) tanto para la App como para n8n.
+- **Infraestructura:** Se aseguró la existencia de las carpetas mediante `.gitkeep` y creación dinámica.
+
+**Estado:** Ahora es posible adjuntar y enviar imágenes, videos y documentos sin errores de servidor.
