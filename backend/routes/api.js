@@ -1,9 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const apiController = require('../controllers/apiController');
-const channelController = require('../controllers/channelController');
 const multer = require('multer');
 const path = require('path');
+
+// New Controllers
+const contactController = require('../controllers/contactController');
+const messageController = require('../controllers/messageController');
+const templateController = require('../controllers/templateController');
+const broadcastController = require('../controllers/broadcastController');
+const tagController = require('../controllers/tagController');
+const quickReplyController = require('../controllers/quickReplyController');
+const analyticsController = require('../controllers/analyticsController');
+const channelController = require('../controllers/channelController'); // Existing
 
 // Configure multer for media uploads
 const storage = multer.diskStorage({
@@ -36,53 +44,51 @@ router.post('/auth/pin', (req, res) => {
 });
 
 // Contactos
-router.get('/contacts', apiController.getContacts);
-
-// Gestión Contactos
-router.post('/contacts', apiController.createContact);
-router.put('/contacts/:id', apiController.updateContact);
-router.delete('/contacts/:id', apiController.deleteContact); // Nuevo endpoint para borrar chats
+router.get('/contacts', contactController.getContacts);
+router.post('/contacts', contactController.createContact);
+router.put('/contacts/:id', contactController.updateContact);
+router.delete('/contacts/:id', contactController.deleteContact);
 
 // Gestión Canales (Múltiples Números)
 router.get('/channels', channelController.getChannels);
 router.post('/channels', channelController.createChannel);
 router.put('/channels/:id', channelController.updateChannel);
 router.delete('/channels/:id', channelController.deleteChannel);
-router.post('/channels/test', channelController.testChannel); // New Test Endpoint
+router.post('/channels/test', channelController.testChannel);
 
 // Mensajes
-router.get('/messages/:contactId', apiController.getMessages);
-router.post('/send', apiController.sendMessage);
+router.get('/messages/:contactId', messageController.getMessages);
+router.post('/send', messageController.sendMessage);
 
 // Media Upload + Send
-router.post('/send-media', upload.single('media'), apiController.sendMediaMessage);
+router.post('/send-media', upload.single('media'), messageController.sendMediaMessage);
 
 // Plantillas
-router.get('/templates', apiController.getTemplates);
-router.post('/templates', apiController.createTemplate);
-router.put('/templates/:id', apiController.updateTemplate);
-router.delete('/templates/:id', apiController.deleteTemplate);
+router.get('/templates', templateController.getTemplates);
+router.post('/templates', templateController.createTemplate);
+router.put('/templates/:id', templateController.updateTemplate);
+router.delete('/templates/:id', templateController.deleteTemplate);
 
 // Difusiones (Broadcasts)
-router.get('/broadcasts', apiController.getBroadcasts);
-router.post('/broadcasts', apiController.createBroadcast);
-router.post('/broadcasts/:id/start', apiController.startBroadcast);
-router.delete('/broadcasts/:id', apiController.cancelBroadcast);
+router.get('/broadcasts', broadcastController.getBroadcasts);
+router.post('/broadcasts', broadcastController.createBroadcast);
+router.post('/broadcasts/:id/start', broadcastController.startBroadcast);
+router.delete('/broadcasts/:id', broadcastController.cancelBroadcast);
 
 // Etiquetas (Tags)
-router.get('/tags', apiController.getTags);
-router.post('/tags', apiController.createTag);
-router.put('/tags/:id', apiController.updateTag);
-router.delete('/tags/:id', apiController.deleteTag);
+router.get('/tags', tagController.getTags);
+router.post('/tags', tagController.createTag);
+router.put('/tags/:id', tagController.updateTag);
+router.delete('/tags/:id', tagController.deleteTag);
 
 // Respuestas Rápidas (Quick Replies)
-router.get('/quickreplies', apiController.getQuickReplies);
-router.post('/quickreplies', apiController.createQuickReply);
-router.put('/quickreplies/:id', apiController.updateQuickReply);
-router.delete('/quickreplies/:id', apiController.deleteQuickReply);
+router.get('/quickreplies', quickReplyController.getQuickReplies);
+router.post('/quickreplies', quickReplyController.createQuickReply);
+router.put('/quickreplies/:id', quickReplyController.updateQuickReply);
+router.delete('/quickreplies/:id', quickReplyController.deleteQuickReply);
 
 // Analytics
-router.get('/analytics', apiController.getAnalytics);
+router.get('/analytics', analyticsController.getAnalytics);
 
 // Backup Routes
 const backupService = require('../services/backup');
@@ -110,4 +116,3 @@ router.post('/backups', async (req, res) => {
 });
 
 module.exports = router;
-

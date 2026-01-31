@@ -1,5 +1,17 @@
 
 
+# [V3.1.0] - 2026-01-30 - Refactorización de Arquitectura 🚀
+
+## Resumen
+Se ha modularizado el backend eliminando el "objeto dios" `apiController.js` y separando la lógica en controladores específicos para mejorar la mantenibilidad.
+
+### Backend Refactor
+- **Nuevos Controladores**: `contactController`, `messageController`, `templateController`, etc.
+- **Rutas**: Actualizadas en `api.js` para usar estos controladores.
+- **Limpieza**: Eliminación de duplicidad en envío de medios.
+
+---
+
 # Actualización 30/1/2026 - Versión V3 🚀
 
 ## ✅ ESTADO FINAL: BLINDAJE Y CONTROL TOTAL
