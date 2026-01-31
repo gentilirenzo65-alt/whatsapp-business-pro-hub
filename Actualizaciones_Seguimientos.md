@@ -1,5 +1,44 @@
 
 
+# Actualización 30/1/2026 - Versión V3 🚀
+
+## ✅ ESTADO FINAL: BLINDAJE Y CONTROL TOTAL
+
+Se han implementado cambios estructurales para evitar la pérdida de datos y mejorar la gestión de la bandeja de entrada.
+
+---
+
+## 🛡️ Mejora 1: Blindaje de Persistencia (Anti-Data Loss)
+
+### Diagnóstico:
+Se detectó que la carpeta `backend/data` (donde reside `database.sqlite`) no estaba en el `.gitignore`. Además, los comandos de actualización previos borraban la carpeta completa del servidor.
+
+### Solución:
+1.  **Protección de Datos:** Se actualizó `.gitignore` para incluir `backend/data/` y `backend/uploads/`.
+2.  **Despliegue Seguro:** Se creó el script `deploy_safe.sh`. Este script descarga cambios de GitHub y reconstruye contenedores **sin borrar** los volúmenes de datos.
+3.  **Docker Volumes:** Se verificó que `docker-compose.yml` mapee correctamente `./backend/data` para persistencia.
+
+---
+
+## 🗑️ Mejora 2: Gestión de Chats (Eliminar)
+
+### Funcionalidad:
+Ahora es posible eliminar cualquier chat directamente desde la interfaz.
+- Al borrar un contacto, se eliminan **en cascada** todos sus mensajes asociados en la base de datos.
+- Se agregó un ícono de "Basura" en la lista de chats que se activa al pasar el mouse por encima del contacto.
+
+---
+
+## 👤 Mejora 3: Unificación y Normalización (Anti-Duplicados)
+
+### Regla de Oro (Argentina Fix V2):
+Se implementó un middleware y lógica centralizada para asegurar que los números de Argentina siempre se manejen sin el prefijo `9`.
+- **Inbound:** Normalización automática al recibir mensajes.
+- **Outbound:** Normalización al enviar mensajes y plantillas.
+- **Sync de Perfil:** Si el contacto ya existe pero cambia su nombre en WhatsApp, el sistema lo actualiza localmente en lugar de crear un duplicado.
+
+---
+
 # Actualización 28-29/1/2026
 
 ## ✅ ESTADO FINAL: FUNCIONANDO
