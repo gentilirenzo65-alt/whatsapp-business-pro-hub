@@ -93,7 +93,7 @@ const receiveWebhook = async (req, res) => {
             const signatureHash = elements[1];
             const expectedHash = crypto
                 .createHmac('sha256', appSecret)
-                .update(JSON.stringify(req.body))
+                .update(req.rawBody || JSON.stringify(req.body)) // Try rawBody first
                 .digest('hex');
 
             if (signatureHash !== expectedHash) {

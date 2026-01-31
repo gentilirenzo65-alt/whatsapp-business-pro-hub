@@ -45,10 +45,10 @@ const ChatView: React.FC<ChatViewProps> = ({
       ...m,
       timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp),
       isMine: m.direction === 'outbound',
-      mediaUrl: m.media_url,
-      mediaType: m.type,
-      text: m.body,
-      fileName: m.body
+      mediaUrl: m.media_url || m.mediaUrl,
+      type: m.type || m.mediaType || 'text',
+      text: m.body || m.text,
+      fileName: m.body || m.fileName
     }));
   }, [selectedContactId, messagesByContact]);
 
@@ -179,7 +179,7 @@ const ChatView: React.FC<ChatViewProps> = ({
       direction: 'outbound',
       contact_id: selectedContact.id,
       channelId: currentApi?.phoneNumber || 'unknown',
-      mediaType: 'text'
+      type: 'text'
     };
 
     addMessageToStore(selectedContact.id, newMsg as any);
@@ -205,7 +205,7 @@ const ChatView: React.FC<ChatViewProps> = ({
 
     // Optimistic UI: show temp message
     const tempId = `out_${Date.now()}`;
-    const mediaType = file.type.startsWith('image/') ? 'image'
+    const type = file.type.startsWith('image/') ? 'image'
       : file.type.startsWith('video/') ? 'video'
         : file.type.startsWith('audio/') ? 'audio'
           : 'document';
@@ -213,15 +213,15 @@ const ChatView: React.FC<ChatViewProps> = ({
     const tempMsg: Message = {
       id: tempId,
       senderId: 'me',
-      text: `[Enviando ${mediaType}...]`,
-      body: `[Enviando ${mediaType}...]`,
+      text: `[Enviando ${type}...]`,
+      body: `[Enviando ${type}...]`,
       timestamp: new Date(),
       isMine: true,
       status: 'pending',
       direction: 'outbound',
       contact_id: selectedContact.id,
       channelId: currentApi?.phoneNumber || 'unknown',
-      mediaType: mediaType,
+      type: type,
       mediaUrl: URL.createObjectURL(file)
     };
 
@@ -275,7 +275,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const renderMessageContent = (msg: Message) => {
-    switch (msg.mediaType) {
+    switch (msg.type) {
       case 'image':
         return (
           <div className="space-y-2">

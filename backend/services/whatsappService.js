@@ -20,23 +20,25 @@ class WhatsAppService {
             // Si el canal no existe, podríamos loguearlo o usar fallback. 
             // Por ahora seguimos, pero idealmente enlazamos el mensaje al canal.
 
-            // 1. Identificar o Crear Contacto
-            const phone = contactData.wa_id;
+            // 1. Identificar o Crear Contacto (Normalización Argentina V2)
+            // Resilience: Fallback to messageData.from if contactData is missing
+            let rawPhone = contactData?.wa_id || messageData?.from || '';
+            let phone = rawPhone.replace(/\D/g, '');
             const name = contactData?.profile?.name || phone || 'Unknown';
 
-            let contact = await Contact.findOne({ where: { phone: phone }, transaction });
-
-            // Fix Duplication for Argentina (549 vs 54)
-            if (!contact && phone.startsWith('549')) {
-                const altPhone = phone.replace('549', '54');
-                contact = await Contact.findOne({ where: { phone: altPhone }, transaction });
+            // REGLA DE ORO: Si es Argentina y empieza con 549, quitar el 9 PARA SIEMPRE.
+            if (phone.startsWith('549')) {
+                phone = '54' + phone.substring(3);
             }
+
+            // Buscar contacto (ahora con el número ya normalizado)
+            let contact = await Contact.findOne({ where: { phone: phone }, transaction });
 
             if (!contact) {
                 contact = await Contact.create({
                     phone: phone,
                     name: name,
-                    avatar: '',
+                    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
                     assigned_agent_id: null,
                     tags: []
                 }, { transaction });
@@ -117,17 +119,21 @@ class WhatsAppService {
         const { Message } = require('../models'); // Re-import to ensure scope
 
         try {
-            console.log(`📥 Iniciando descarga de media en segundo plano: ${mediaId}`);
+            console.log(`📥 Iniciando descarga de media en segundo plano: ${mediaId} (Tipo: ${messageData.type})`);
 
-            // Step 1: Get media info
-            const mediaInfoRes = await axios.get(`https://graph.facebook.com/v17.0/${mediaId}`, {
+            // Step 1: Get media info (Using v21.0 and trailing slash as requested)
+            const mediaInfoRes = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             const metaMediaUrl = mediaInfoRes.data.url;
             const mimeType = mediaInfoRes.data.mime_type || 'application/octet-stream';
 
-            // Step 2: Download file
+            if (!metaMediaUrl) {
+                throw new Error('Meta API no devolvió URL de descarga para el media_id provisto.');
+            }
+
+            // Step 2: Download binary with Token (IMPORTANT: Authorization header is required)
             const mediaRes = await axios.get(metaMediaUrl, {
                 headers: { 'Authorization': `Bearer ${token}` },
                 responseType: 'arraybuffer'
@@ -140,9 +146,13 @@ class WhatsAppService {
                 'image/webp': '.webp',
                 'audio/ogg': '.ogg',
                 'audio/mpeg': '.mp3',
+                'audio/amr': '.amr',
                 'video/mp4': '.mp4',
                 'application/pdf': '.pdf',
-                'image/webp': '.webp'
+                'application/vnd.ms-excel': '.xls',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+                'application/msword': '.doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx'
             };
             const ext = extMap[mimeType] || '.bin';
 
@@ -186,9 +196,9 @@ class WhatsAppService {
     // ENVÍO DE MENSAJES
     // -------------------------------------------------------------
     async sendMessage(toPhone, text, type = 'text', mediaUrl = null, channelId = null) {
-        // Fix for Argentina
+        // Argentina Normalization V2 (Strict)
         if (toPhone && toPhone.startsWith('549')) {
-            toPhone = toPhone.replace('549', '54');
+            toPhone = '54' + toPhone.substring(3);
         }
 
         console.log(`📡 Enviando mensaje a [${toPhone}] por canal [${channelId || 'DEFAULT'}]`);
@@ -250,34 +260,34 @@ class WhatsAppService {
     // ENVÍO DE MENSAJES CON PLANTILLA OFICIAL
     // -------------------------------------------------------------
     async sendTemplateMessage(toPhone, templateName, language = 'es', channelId = null, parameters = []) {
-        // Fix for Argentina
+        // Argentina Normalization V2 (Strict)
         if (toPhone && toPhone.startsWith('549')) {
-            toPhone = toPhone.replace('549', '54');
+            toPhone = '54' + toPhone.substring(3);
         }
 
         console.log(`📋 Enviando plantilla [${templateName}] a [${toPhone}] por canal [${channelId || 'DEFAULT'}]`);
 
         let token, phoneId;
 
-        // 1. Determine Credentials from DB
+        // 1. Determine Credentials from DB (STRICT)
         if (channelId) {
             const channel = await Channel.findByPk(channelId);
             if (channel) {
                 token = channel.accessToken;
                 phoneId = channel.phoneId;
+            } else {
+                console.error(`❌ CRITICAL: Channel ID ${channelId} not found in DB.`);
+                return { success: false, error: 'Channel not found in DB' };
             }
+        } else {
+            console.error('❌ CRITICAL: No channelId provided for sendTemplateMessage (Strict Mode).');
+            return { success: false, error: 'Channel ID required' };
         }
 
-        // 2. Fallback to Env if no channel found
+        // 2. Strict Check
         if (!token || !phoneId) {
-            console.warn('⚠️ No se especificó canal válido. Usando .env fallback.');
-            token = process.env.META_ACCESS_TOKEN;
-            phoneId = process.env.META_PHONE_ID;
-        }
-
-        if (!token || !phoneId) {
-            console.error('❌ CRITICAL: No credentials found (DB or ENV).');
-            return { success: false, error: 'No credentials available' };
+            console.error(`❌ CRITICAL: Channel ${channelId} has missing credentials in DB.`);
+            return { success: false, error: 'Channel credentials missing. Update Settings.' };
         }
 
         const axios = require('axios');

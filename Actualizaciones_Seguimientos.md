@@ -936,3 +936,23 @@ Esto provocaba que el sistema detectara dos números distintos para la misma per
 - **Lógica de Normalización Inteligente (`whatsappService.js`):** Al recibir un mensaje, el sistema ahora verifica variantes del número (con y sin '9').
 - **Resultado:** Si llega un mensaje desde `549...`, el sistema es capaz de encontrar y usar el contacto existente `54...`, manteniendo toda la conversación en un solo hilo coherente.
 
+## 12. Previsualización de Imágenes ("Mini Vista") (30/01/2026 - 19:30)
+
+### Problema Reportado:
+Las imágenes enviadas o recibidas no eran visibles en el chat, requiriendo acciones externas o fallando por completo.
+
+### Solución Implementada:
+- **Renderizado Dinámico (`ChatView.tsx`):** Se habilitó la visualización directa de multimedia en la burbuja de chat.
+- **Lógica de Fallback:** Si una imagen falla al descargarse (ej. por error de token), el sistema muestra un aviso de "Imagen no disponible" en lugar de un icono roto o nada, informando al usuario.
+
+## 13. Modo Estricto de Credenciales (30/01/2026 - 19:50)
+
+### Problema Reportado:
+Confusión entre las credenciales del archivo servidor (`.env`) y las de la Base de Datos (`Settings`), lo que impedía que los cambios realizados por el usuario en el panel tuvieran efecto real.
+
+### Solución Implementada:
+- **Eliminación de Fallback:** Se refactorizaron los servicios de envío y descarga para ignorar el archivo `.env`. Ahora el sistema **solo** utiliza lo que el usuario configura en el CRM.
+- **Resultado:** El usuario tiene soberanía total sobre las credenciales desde el panel de control. No hay configuraciones "fantasma".
+
+---
+**Estado Final:** Sistema estabilizado, previsualizaciones activas y control centralizado de credenciales.

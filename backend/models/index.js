@@ -93,14 +93,14 @@ const Message = sequelize.define('Message', {
         primaryKey: true
     },
     type: {
-        type: DataTypes.ENUM('text', 'image', 'audio', 'document', 'video', 'sticker', 'interactive'),
+        type: DataTypes.STRING, // More robust than ENUM
         defaultValue: 'text'
     },
     body: {
         type: DataTypes.TEXT
     },
     media_url: {
-        type: DataTypes.STRING
+        type: DataTypes.TEXT // Use TEXT for long Meta URLs
     },
     direction: {
         type: DataTypes.ENUM('inbound', 'outbound'),

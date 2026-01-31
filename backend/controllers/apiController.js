@@ -94,7 +94,12 @@ const createContact = async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Phone is required' });
 
     try {
-        const cleanPhone = phone.replace(/\D/g, '');
+        let cleanPhone = phone.replace(/\D/g, '');
+
+        // ARGENTINA NORMALIZATION V2 (REMOVE 9)
+        if (cleanPhone.startsWith('549')) {
+            cleanPhone = '54' + cleanPhone.substring(3);
+        }
 
         const [contact, created] = await Contact.findOrCreate({
             where: { phone: cleanPhone },
@@ -463,9 +468,11 @@ const sendMediaMessage = async (req, res) => {
             mediaId = uploadRes.data.id;
             console.log(`📤 Media uploaded to Meta: ${mediaId}`);
 
-            // Fix for Argentina
+            // Argentina Normalization V2 (Strict)
             let toPhone = contact.phone;
-            if (toPhone && toPhone.startsWith('549')) toPhone = toPhone.replace('549', '54');
+            if (toPhone && toPhone.startsWith('549')) {
+                toPhone = '54' + toPhone.substring(3);
+            }
 
             // Step 2: Send message
             const payload = {
