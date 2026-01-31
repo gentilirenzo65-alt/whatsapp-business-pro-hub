@@ -10,7 +10,13 @@ Se ha modularizado el backend eliminando el "objeto dios" `apiController.js` y s
 - **Rutas**: Actualizadas en `api.js` para usar estos controladores.
 - **Limpieza**: Eliminación de duplicidad en envío de medios.
 
+### Despliegue VPS
+- **Estado**: Exitoso ✅
+- **Fecha**: 30/01/2026
+- **Acciones**: Git pull, reconstrucción de contenedores y verificación de servicios online.
+
 ---
+
 
 # Actualización 30/1/2026 - Versión V3 🚀
 
