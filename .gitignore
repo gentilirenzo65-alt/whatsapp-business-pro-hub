@@ -22,10 +22,11 @@ backend/.env
 
 # Local Database
 backend/database.sqlite
+backend/data/
 
 # Media Uploads
-backend/uploads
-uploads
+backend/uploads/
+uploads/
 
 # OS & Editor
 .vscode/*

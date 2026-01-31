@@ -41,6 +41,7 @@ router.get('/contacts', apiController.getContacts);
 // Gestión Contactos
 router.post('/contacts', apiController.createContact);
 router.put('/contacts/:id', apiController.updateContact);
+router.delete('/contacts/:id', apiController.deleteContact); // Nuevo endpoint para borrar chats
 
 // Gestión Canales (Múltiples Números)
 router.get('/channels', channelController.getChannels);

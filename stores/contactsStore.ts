@@ -21,6 +21,7 @@ interface ContactsState {
     updateContactTags: (contactId: string, tagIds: string[]) => Promise<void>;
     incrementUnread: (contactId: string) => void;
     resetUnread: (contactId: string) => void;
+    deleteContact: (contactId: string) => Promise<void>;
 }
 
 export const useContactsStore = create<ContactsState>((set, get) => ({
@@ -93,5 +94,18 @@ export const useContactsStore = create<ContactsState>((set, get) => ({
         contacts: state.contacts.map(c =>
             c.id === contactId ? { ...c, unreadCount: 0 } : c
         )
-    }))
+    })),
+
+    // Delete contact and its messages
+    deleteContact: async (contactId) => {
+        try {
+            await axios.delete(`${API_URL}/contacts/${contactId}`);
+            set((state) => ({
+                contacts: state.contacts.filter(c => c.id !== contactId)
+            }));
+        } catch (error) {
+            console.error('Error deleting contact:', error);
+            throw error;
+        }
+    }
 }));

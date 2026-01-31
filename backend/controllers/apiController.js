@@ -638,6 +638,28 @@ const getAnalytics = async (req, res) => {
     }
 };
 
+// DELETE /api/contacts/:id
+const deleteContact = async (req, res) => {
+    const { id } = req.params;
+    const { Message } = require('../models');
+
+    try {
+        const contact = await Contact.findByPk(id);
+        if (!contact) return res.status(404).json({ error: 'Contact not found' });
+
+        // Delete all messages associated with this contact
+        await Message.destroy({ where: { contact_id: id } });
+
+        // Delete the contact
+        await contact.destroy();
+
+        res.json({ success: true, message: 'Contacto y mensajes eliminados correctamente' });
+    } catch (error) {
+        console.error('Error deleting contact:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
 module.exports = {
     getContacts,
     getMessages,
@@ -645,6 +667,7 @@ module.exports = {
     sendMediaMessage,
     createContact,
     updateContact,
+    deleteContact,
     getTemplates,
     createTemplate,
     updateTemplate,

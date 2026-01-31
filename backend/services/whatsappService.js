@@ -42,6 +42,12 @@ class WhatsAppService {
                     assigned_agent_id: null,
                     tags: []
                 }, { transaction });
+            } else {
+                // Si el nombre cambió en WhatsApp, lo actualizamos localmente
+                if (name && name !== 'Unknown' && name !== contact.name) {
+                    contact.name = name;
+                    await contact.save({ transaction });
+                }
             }
 
             // Link contact to channel if we want strict segmentation later, 

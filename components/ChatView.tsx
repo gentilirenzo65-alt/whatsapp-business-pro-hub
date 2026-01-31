@@ -435,7 +435,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                     <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 pr-8"> {/* Added right padding for trash icon */}
                   <div className="flex justify-between items-center">
                     <h3 className={`truncate text-sm ${contact.unreadCount > 0 ? 'font-black text-black' : 'font-bold text-gray-900'} max-w-[75%]`}>
                       {contact.name !== 'Unknown' && contact.name !== contact.phone ? contact.name : contact.phone}
@@ -461,7 +461,19 @@ const ChatView: React.FC<ChatViewProps> = ({
 
                     {/* Channel Badge & Unread Count */}
                     <div className="flex items-center space-x-2">
-                      {/* Channel Badge - Visual Identifier */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`¿Estás seguro de eliminar el chat con ${contact.name}?`)) {
+                            useContactsStore.getState().deleteContact(contact.id);
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-red-500 transition-all"
+                        title="Eliminar Chat"
+                      >
+                        <i className="fa-solid fa-trash-can text-xs"></i>
+                      </button>
+
                       {(() => {
                         const ch = channels.find(c => c.phoneNumber === contact.assignedBusinessPhone);
                         if (!ch) return null;
