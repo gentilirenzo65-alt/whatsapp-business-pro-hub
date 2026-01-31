@@ -20,19 +20,34 @@ class WhatsAppService {
             // Si el canal no existe, podríamos loguearlo o usar fallback. 
             // Por ahora seguimos, pero idealmente enlazamos el mensaje al canal.
 
-            // 1. Identificar o Crear Contacto (Normalización Argentina V2)
+            // 1. Identificar o Crear Contacto (Normalización Argentina V2.1 - Con '9')
             // Resilience: Fallback to messageData.from if contactData is missing
             let rawPhone = contactData?.wa_id || messageData?.from || '';
             let phone = rawPhone.replace(/\D/g, '');
             const name = contactData?.profile?.name || phone || 'Unknown';
 
-            // REGLA DE ORO: Si es Argentina y empieza con 549, quitar el 9 PARA SIEMPRE.
-            if (phone.startsWith('549')) {
-                phone = '54' + phone.substring(3);
+            // REGLA DE ORO V3: Si es Argentina, SIEMPRE usar 549 (Estándar WhatsApp)
+            // Si viene como 54XXXXXXXXXX, lo convertimos a 549XXXXXXXXXX
+            if (phone.startsWith('54') && !phone.startsWith('549')) {
+                phone = '549' + phone.substring(2);
             }
+            // Si ya viene como 549..., lo dejamos así.
 
-            // Buscar contacto (ahora con el número ya normalizado)
+            // Buscar contacto (Prioridad: Formato nuevo 549)
             let contact = await Contact.findOne({ where: { phone: phone }, transaction });
+
+            // Si no existe con 549, buscar si existe con el formato viejo (54 sin 9) para migrarlo
+            if (!contact && phone.startsWith('549')) {
+                const legacyPhone = '54' + phone.substring(3);
+                const legacyContact = await Contact.findOne({ where: { phone: legacyPhone }, transaction });
+
+                if (legacyContact) {
+                    console.log(`🔄 Migrando contacto ${legacyContact.name} de formato ${legacyPhone} a ${phone}`);
+                    legacyContact.phone = phone; // Actualizamos al nuevo formato
+                    await legacyContact.save({ transaction });
+                    contact = legacyContact; // Usamos este
+                }
+            }
 
             if (!contact) {
                 contact = await Contact.create({
@@ -202,9 +217,9 @@ class WhatsAppService {
     // ENVÍO DE MENSAJES
     // -------------------------------------------------------------
     async sendMessage(toPhone, text, type = 'text', mediaUrl = null, channelId = null) {
-        // Argentina Normalization V2 (Strict)
-        if (toPhone && toPhone.startsWith('549')) {
-            toPhone = '54' + toPhone.substring(3);
+        // Argentina Normalization V2.1 (Strict: Add 9)
+        if (toPhone && toPhone.startsWith('54') && !toPhone.startsWith('549')) {
+            toPhone = '549' + toPhone.substring(2);
         }
 
         console.log(`📡 Enviando mensaje a [${toPhone}] por canal [${channelId || 'DEFAULT'}]`);
@@ -266,9 +281,9 @@ class WhatsAppService {
     // ENVÍO DE MENSAJES CON PLANTILLA OFICIAL
     // -------------------------------------------------------------
     async sendTemplateMessage(toPhone, templateName, language = 'es', channelId = null, parameters = []) {
-        // Argentina Normalization V2 (Strict)
-        if (toPhone && toPhone.startsWith('549')) {
-            toPhone = '54' + toPhone.substring(3);
+        // Argentina Normalization V2.1 (Strict: Add 9)
+        if (toPhone && toPhone.startsWith('54') && !toPhone.startsWith('549')) {
+            toPhone = '549' + toPhone.substring(2);
         }
 
         console.log(`📋 Enviando plantilla [${templateName}] a [${toPhone}] por canal [${channelId || 'DEFAULT'}]`);

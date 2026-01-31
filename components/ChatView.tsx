@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import axios from 'axios';
 import { Contact, Message, QuickReply } from '../types';
 
 // Zustand Stores
@@ -12,8 +13,32 @@ interface ChatViewProps {
 
 const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3';
 
-import axios from 'axios';
 import { API_URL, BACKEND_URL } from '../config';
+
+// === UTILITY: Normalize Phone Numbers (Argentina Logic) ===
+const normalizePhoneNumber = (phone: string | undefined): string => {
+  if (!phone) return '';
+  // Remove non-numeric characters
+  let cleaned = phone.replace(/\D/g, '');
+
+  // Remove leading zeros (common in some inputs)
+  cleaned = cleaned.replace(/^0+/, '');
+
+  // specific fix for Argentina (54)
+  // Standard mobile length with 9 is 13 digits (54 9 XX XXXX XXXX)
+  // Length without 9 is 12 digits (54 XX XXXX XXXX)
+
+  if (cleaned.startsWith('54')) {
+    // If it has 12 digits, it's missing the 9. Add it.
+    if (cleaned.length === 12) {
+      cleaned = '549' + cleaned.substring(2);
+    }
+    // Note: If it has 13 digits and starts with 549, it's likely already correct.
+    // If it handles other lengths, we might need more logic, but 12->13 is the critical "fix".
+  }
+
+  return cleaned;
+};
 
 const ChatView: React.FC<ChatViewProps> = ({
   selectedContactId,
@@ -30,18 +55,94 @@ const ChatView: React.FC<ChatViewProps> = ({
     updateMessageStatus
   } = useMessagesStore();
 
-  // Derive current contact from store
-  const selectedContact = useMemo(() =>
+  // === MERGE DUPLICATE CONTACTS LOGIC ===
+  const mergedContacts = useMemo(() => {
+    const map = new Map<string, Contact & { linkedIds: string[] }>();
+
+    contacts.forEach(contact => {
+      // Normalize phone for the key
+      const normalizedPhone = normalizePhoneNumber(contact.phone);
+      // Fallback to ID if phone is empty, but preferably use phone key
+      const key = normalizedPhone || contact.id;
+
+      if (!map.has(key)) {
+        map.set(key, { ...contact, linkedIds: [contact.id] });
+      } else {
+        const existing = map.get(key)!;
+
+        // Avoid adding duplicates to linkedIds
+        if (!existing.linkedIds.includes(contact.id)) {
+          existing.linkedIds.push(contact.id);
+        }
+
+        // Merge logic: prefer '549' format for the display object
+        const existingHas9 = existing.phone.includes('549');
+        const contactHas9 = contact.phone.includes('549');
+
+        if (!existingHas9 && contactHas9) {
+          // Switch to the contact that has the correct format
+          const ids = existing.linkedIds;
+          // Sum unreads
+          const totalUnread = existing.unreadCount + contact.unreadCount;
+
+          map.set(key, {
+            ...contact,
+            linkedIds: ids,
+            unreadCount: totalUnread,
+            // Keep the most recent activity
+            lastActive: new Date(contact.lastActive) > new Date(existing.lastActive) ? contact.lastActive : existing.lastActive
+          });
+        } else {
+          // Keep existing but update stats
+          existing.unreadCount += contact.unreadCount;
+          if (new Date(contact.lastActive) > new Date(existing.lastActive)) {
+            existing.lastActive = contact.lastActive;
+          }
+          // Use the best available name
+          if ((existing.name === existing.phone || existing.name === 'Unknown') && contact.name !== contact.phone) {
+            existing.name = contact.name;
+          }
+        }
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) =>
+      new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime()
+    );
+  }, [contacts]);
+
+  // Derive current contact (Original Object) but find its merged equivalent
+  const selectedContactRaw = useMemo(() =>
     selectedContactId ? contacts.find(c => c.id === selectedContactId) || null : null,
     [selectedContactId, contacts]
   );
 
-  // Get messages for current contact from cache
+  const selectedContact = useMemo(() => {
+    if (!selectedContactRaw) return null;
+    const norm = normalizePhoneNumber(selectedContactRaw.phone);
+    // Find the merged representation that has this key
+    return mergedContacts.find(c => normalizePhoneNumber(c.phone) === norm) || selectedContactRaw;
+  }, [selectedContactRaw, mergedContacts]);
+
+  // Get messages for current contact from cache (aggregating linked contacts)
   const messages = useMemo(() => {
-    if (!selectedContactId) return [];
-    const cached = messagesByContact[selectedContactId] || [];
-    // Transform for display
-    return cached.map((m: any) => ({
+    if (!selectedContact) return [];
+
+    const idsToFetch = (selectedContact as any).linkedIds || [selectedContact.id];
+    let allMessages: any[] = [];
+    const seenIds = new Set();
+
+    idsToFetch.forEach((id: string) => {
+      const msgs = messagesByContact[id] || [];
+      msgs.forEach((m: any) => {
+        if (!seenIds.has(m.id)) {
+          seenIds.add(m.id);
+          allMessages.push(m);
+        }
+      });
+    });
+
+    return allMessages.map((m: any) => ({
       ...m,
       timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp),
       isMine: m.direction === 'outbound',
@@ -49,8 +150,8 @@ const ChatView: React.FC<ChatViewProps> = ({
       type: m.type || m.mediaType || 'text',
       text: m.body || m.text,
       fileName: m.body || m.fileName
-    }));
-  }, [selectedContactId, messagesByContact]);
+    })).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  }, [selectedContact, messagesByContact]);
 
   // Derive current API from store
   const currentApi = channels.find(api => api.id === currentChannelId) || channels[0];
@@ -66,7 +167,8 @@ const ChatView: React.FC<ChatViewProps> = ({
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showMediaMenu, setShowMediaMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [contactInfoTab, setContactInfoTab] = useState<'details' | 'media'>('details'); // New state
+  const [contactInfoTab, setContactInfoTab] = useState<'details' | 'media'>('details');
+  const [viewingMedia, setViewingMedia] = useState<Message | null>(null); // State for Lightbox
 
   // Typing indicators now come from appStore (managed by App.tsx)
 
@@ -87,25 +189,26 @@ const ChatView: React.FC<ChatViewProps> = ({
 
   // FETCH MESSAGES from store when contact changes
   useEffect(() => {
-    if (selectedContactId) {
-      fetchMessagesFromStore(selectedContactId);
+    if (selectedContact) {
+      // Fetch for ALL linked IDs
+      const idsToFetch = (selectedContact as any).linkedIds || [selectedContact.id];
+      idsToFetch.forEach((id: string) => fetchMessagesFromStore(id));
 
       setShowTagPicker(false);
       setShowContactEditor(false);
       setShowMediaMenu(false);
       setContactInfoTab('details'); // Reset tab
-      if (selectedContact) {
-        setEditingContact({ ...selectedContact });
-      }
+      setEditingContact({ ...selectedContact });
 
       // Mark as read and sync with server
-      if (selectedContact && selectedContact.unreadCount > 0) {
-        resetUnread(selectedContactId);
-
-        // Sync unreadCount with server
-        axios.put(`${API_URL}/contacts/${selectedContactId}`, {
-          unreadCount: 0
-        }).catch(err => console.error('Error syncing unreadCount:', err));
+      if (selectedContact.unreadCount > 0) {
+        idsToFetch.forEach((id: string) => {
+          resetUnread(id);
+          // Sync unreadCount with server
+          axios.put(`${API_URL}/contacts/${id}`, {
+            unreadCount: 0
+          }).catch(err => console.error('Error syncing unreadCount:', err));
+        });
       }
 
       // STICKY CHANNEL LOGIC: Switch to the channel the contact used
@@ -116,7 +219,7 @@ const ChatView: React.FC<ChatViewProps> = ({
         }
       }
     }
-  }, [selectedContactId]); // Use ID specifically
+  }, [selectedContact]); // Dependent on computed selectedContact
 
   // ... (scroll effect remain)
 
@@ -152,7 +255,10 @@ const ChatView: React.FC<ChatViewProps> = ({
     const newTags = currentTags.includes(tagId)
       ? currentTags.filter(id => id !== tagId)
       : [...currentTags, tagId];
-    updateContactTags(selectedContact.id, newTags);
+
+    // Update for ALL linked IDs to keep them in sync
+    const ids = (selectedContact as any).linkedIds || [selectedContact.id];
+    ids.forEach((id: string) => updateContactTags(id, newTags));
   };
 
   const toggleEditingTag = (tagId: string) => {
@@ -255,14 +361,25 @@ const ChatView: React.FC<ChatViewProps> = ({
 
   const saveContactChanges = async () => {
     try {
+      // NORMALIZE PHONE ON SAVE
+      const payload = { ...editingContact };
+      if (payload.phone) {
+        // Enforce Argentina Standard: 549 + Area + Number (13 digits usually)
+        let formatted = normalizePhoneNumber(payload.phone);
+
+        // If it was normalized but user typed something weird, accept the normalized one
+        payload.phone = formatted;
+      }
+
       if (editingContact.id) {
         // UPDATE Existing
-        await axios.put(`${API_URL}/contacts/${editingContact.id}`, editingContact);
-        updateContact(editingContact as Contact & { id: string });
+        await axios.put(`${API_URL}/contacts/${editingContact.id}`, payload);
+        // Optimistically update store
+        updateContact(payload as Contact & { id: string });
       } else {
         // CREATE New
-        if (!editingContact.phone) return alert('El teléfono es obligatorio');
-        const res = await axios.post(`${API_URL}/contacts`, editingContact);
+        if (!payload.phone) return alert('El teléfono es obligatorio (ej. 549264...)');
+        const res = await axios.post(`${API_URL}/contacts`, payload);
         const newContact = res.data;
         updateContact(newContact);
         onSelectContact(newContact); // Automatically open chat
@@ -280,12 +397,14 @@ const ChatView: React.FC<ChatViewProps> = ({
         return (
           <div className="space-y-2">
             {msg.mediaUrl ? (
-              <div className="relative group">
+              <div
+                className="relative group cursor-pointer"
+                onClick={() => setViewingMedia(msg)}
+              >
                 <img
-                  src={msg.mediaUrl.startsWith('http') ? msg.mediaUrl : `${BACKEND_URL}${msg.mediaUrl}`}
+                  src={msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `${BACKEND_URL}${msg.mediaUrl}`}
                   alt="Imagen"
-                  className="rounded-lg max-w-[280px] w-full h-auto object-cover cursor-pointer hover:brightness-95 transition shadow-sm border border-gray-100"
-                  onClick={() => window.open(msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `${BACKEND_URL}${msg.mediaUrl}`, '_blank')}
+                  className="rounded-lg max-w-[280px] w-full h-auto object-cover hover:brightness-95 transition shadow-sm border border-gray-100"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
@@ -301,7 +420,7 @@ const ChatView: React.FC<ChatViewProps> = ({
 
                 {/* Hover overlay hint */}
                 <div className="absolute inset-0 bg-black/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                  <i className="fa-solid fa-expand text-white Drop-shadow-md"></i>
+                  <i className="fa-solid fa-expand text-white Drop-shadow-md text-2xl"></i>
                 </div>
               </div>
             ) : (
@@ -312,6 +431,42 @@ const ChatView: React.FC<ChatViewProps> = ({
                 <div className="flex-1">
                   <p className="text-xs font-bold text-gray-500">Procesando imagen...</p>
                   <p className="text-[9px] text-gray-400">Si tarda mucho, revise el Token.</p>
+                </div>
+              </div>
+            )}
+            {msg.text && <p className="text-sm leading-normal text-gray-700 mt-1">{msg.text}</p>}
+          </div>
+        );
+      case 'video':
+        return (
+          <div className="space-y-2">
+            {msg.mediaUrl ? (
+              <div
+                className="relative group cursor-pointer bg-black rounded-lg overflow-hidden max-w-[280px]"
+                onClick={() => setViewingMedia(msg)}
+              >
+                <video
+                  src={msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `${BACKEND_URL}${msg.mediaUrl}`}
+                  className="w-full h-auto max-h-[300px] object-contain"
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+                {/* Play Overlay */}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                  <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                    <i className="fa-solid fa-play text-green-600 pl-1 text-xl"></i>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300 flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-400">
+                  <i className="fa-solid fa-spinner fa-spin"></i>
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-gray-500">Descargando video...</p>
+                  <p className="text-[9px] text-gray-400">Espere un momento.</p>
                 </div>
               </div>
             )}
@@ -332,17 +487,40 @@ const ChatView: React.FC<ChatViewProps> = ({
         );
       case 'document':
         return (
-          <div className="flex items-center p-3 bg-gray-50 rounded-xl border border-gray-100 hover:bg-gray-100 transition-colors cursor-pointer group">
-            <div className="w-12 h-12 bg-red-100 text-red-500 rounded-lg flex items-center justify-center mr-3 shadow-sm group-hover:scale-105 transition-transform">
-              <i className="fa-solid fa-file-pdf text-2xl"></i>
-            </div>
-            <div className="flex-1 min-w-0 pr-4">
-              <p className="text-sm font-bold text-gray-800 truncate">{msg.fileName}</p>
-              <p className="text-[10px] text-gray-400 font-bold uppercase">{msg.fileSize} • PDF</p>
-            </div>
-            <button className="text-gray-400 hover:text-green-600 transition-colors">
-              <i className="fa-solid fa-download"></i>
-            </button>
+          <div className="space-y-2">
+            {msg.mediaUrl ? (
+              <div
+                className="flex items-center p-3 bg-gray-50 rounded-xl border border-gray-100 hover:bg-gray-100 transition-colors cursor-pointer group"
+                onClick={() => window.open(msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `${BACKEND_URL}${msg.mediaUrl}`, '_blank')}
+              >
+                <div className="w-12 h-12 bg-red-100 text-red-500 rounded-lg flex items-center justify-center mr-3 shadow-sm group-hover:scale-105 transition-transform">
+                  <i className="fa-solid fa-file-pdf text-2xl"></i>
+                </div>
+                <div className="flex-1 min-w-0 pr-4">
+                  <p className="text-sm font-bold text-gray-800 truncate">{msg.fileName}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">{msg.fileSize} • PDF</p>
+                </div>
+                <button
+                  className="text-gray-400 hover:text-green-600 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `${BACKEND_URL}${msg.mediaUrl}`, '_blank');
+                  }}
+                >
+                  <i className="fa-solid fa-download"></i>
+                </button>
+              </div>
+            ) : (
+              <div className="p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300 flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-400">
+                  <i className="fa-solid fa-spinner fa-spin"></i>
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-gray-500">Descargando documento...</p>
+                  <p className="text-[9px] text-gray-400">Espere un momento.</p>
+                </div>
+              </div>
+            )}
           </div>
         );
       default:
@@ -410,7 +588,7 @@ const ChatView: React.FC<ChatViewProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {contacts
+          {mergedContacts
             .filter(contact =>
               searchQuery === '' ||
               contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -543,7 +721,12 @@ const ChatView: React.FC<ChatViewProps> = ({
                     Escribiendo...
                   </p>
                 ) : (
-                  <p className="text-[10px] text-gray-500 font-bold">{selectedContact.phone} <span className="mx-1">•</span> <span className="text-blue-500">Canal: {selectedContact.assignedBusinessPhone}</span></p>
+                  <p className="text-[10px] text-gray-500 font-bold">
+                    {selectedContact.phone}
+                    {(selectedContact as any).linkedIds?.length > 1 && <span className="ml-1 text-green-600" title="Contactos Fusionados">(Fusionado)</span>}
+                    <span className="mx-1">•</span>
+                    <span className="text-blue-500">Canal: {selectedContact.assignedBusinessPhone}</span>
+                  </p>
                 )}
               </div>
               <div className="flex items-center space-x-4 pr-2">
@@ -686,6 +869,74 @@ const ChatView: React.FC<ChatViewProps> = ({
                 <i className="fa-solid fa-paper-plane"></i>
               </button>
             </div>
+
+            {/* Modal: Media Lightbox */}
+            {viewingMedia && (
+              <div
+                className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center animate-in fade-in duration-200"
+                onClick={() => setViewingMedia(null)}
+              >
+                <button
+                  className="absolute top-4 right-4 text-white/80 hover:text-white p-2 z-50 transition-colors"
+                  onClick={() => setViewingMedia(null)}
+                >
+                  <i className="fa-solid fa-times text-2xl"></i>
+                </button>
+
+                {/* Download Button */}
+                <a
+                  href={viewingMedia.mediaUrl?.startsWith('http') ? viewingMedia.mediaUrl : `${BACKEND_URL}${viewingMedia.mediaUrl}`}
+                  download
+                  target="_blank"
+                  rel="noreferrer"
+                  className="absolute top-4 right-16 text-white/80 hover:text-white p-2 z-50 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Descargar"
+                >
+                  <i className="fa-solid fa-download text-2xl"></i>
+                </a>
+
+                <div
+                  className="max-w-[90vw] max-h-[90vh] relative flex items-center justify-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {viewingMedia.type === 'image' || viewingMedia.type === 'sticker' ? (
+                    <img
+                      src={viewingMedia.mediaUrl?.startsWith('http') ? viewingMedia.mediaUrl : `${BACKEND_URL}${viewingMedia.mediaUrl}`}
+                      className="max-w-full max-h-[90vh] rounded-md shadow-2xl object-contain"
+                      alt="Media full size"
+                    />
+                  ) : viewingMedia.type === 'video' ? (
+                    <video
+                      controls
+                      autoPlay
+                      className="max-w-full max-h-[90vh] rounded-md shadow-2xl outline-none"
+                      src={viewingMedia.mediaUrl?.startsWith('http') ? viewingMedia.mediaUrl : `${BACKEND_URL}${viewingMedia.mediaUrl}`}
+                    >
+                      Tu navegador no soporta este video.
+                    </video>
+                  ) : (
+                    <div className="bg-white p-8 rounded-xl text-center">
+                      <i className="fa-solid fa-file-circle-question text-6xl text-gray-300 mb-4"></i>
+                      <p className="text-gray-800 font-bold">Archivo no previsualizable</p>
+                      <a
+                        href={viewingMedia.mediaUrl?.startsWith('http') ? viewingMedia.mediaUrl : `${BACKEND_URL}${viewingMedia.mediaUrl}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-4 inline-block bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700"
+                      >
+                        Descargar
+                      </a>
+                    </div>
+                  )}
+                </div>
+                {viewingMedia.text && (
+                  <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent text-white text-center">
+                    <p className="text-lg font-medium max-w-4xl mx-auto">{viewingMedia.text}</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* MODAL: CONTACT INFO & MEDIA */}
             {showContactEditor && (

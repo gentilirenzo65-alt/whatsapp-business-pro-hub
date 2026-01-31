@@ -21,9 +21,9 @@ const createContact = async (req, res) => {
     try {
         let cleanPhone = phone.replace(/\D/g, '');
 
-        // ARGENTINA NORMALIZATION V2 (REMOVE 9)
-        if (cleanPhone.startsWith('549')) {
-            cleanPhone = '54' + cleanPhone.substring(3);
+        // ARGENTINA NORMALIZATION V2.1 (ADD 9)
+        if (cleanPhone.startsWith('54') && !cleanPhone.startsWith('549')) {
+            cleanPhone = '549' + cleanPhone.substring(2);
         }
 
         const [contact, created] = await Contact.findOrCreate({
