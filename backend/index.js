@@ -1,8 +1,9 @@
-require('dotenv').config();
+// CRITICAL: Force IPv4 resolution BEFORE anything else
 const dns = require('node:dns');
 if (dns.setDefaultResultOrder) {
     dns.setDefaultResultOrder('ipv4first');
 }
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
