@@ -1,3 +1,9 @@
+// CRITICAL: Force IPv4 resolution BEFORE any network connections
+const dns = require('node:dns');
+if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder('ipv4first');
+}
+
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
