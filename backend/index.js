@@ -68,7 +68,7 @@ const backupService = require('./services/backup');
 const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 // Sync Database and Start Server
-sequelize.sync({ alter: true }).then(() => {
+sequelize.sync().then(() => {
     console.log('✅ Base de Datos Sincronizada (Tablas creadas/actualizadas)');
 
     // Start the broadcast scheduler
