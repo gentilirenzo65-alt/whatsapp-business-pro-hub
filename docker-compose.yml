@@ -16,6 +16,7 @@ services:
       - META_PHONE_ID=${META_PHONE_ID}
       - META_ACCESS_TOKEN=${META_ACCESS_TOKEN}
       - APP_PINS=${APP_PINS}
+      - DATABASE_URL=${DATABASE_URL}
       - DB_STORAGE_PATH=/app/data/database.sqlite
     networks:
       - whatsapp-hub-network

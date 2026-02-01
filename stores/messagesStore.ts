@@ -7,6 +7,8 @@ import { Message } from '../types';
 import axios from 'axios';
 import { API_URL } from '../config';
 
+import { playNotificationSound } from '../utils/sound';
+
 interface MessagesState {
     // Cached messages by contact ID
     messagesByContact: Record<string, Message[]>;
@@ -47,6 +49,8 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
         }
     },
 
+
+
     // Add a new message to a contact's chat
     addMessage: (contactId, message) => set((state) => {
         const currentMessages = state.messagesByContact[contactId] || [];
@@ -54,6 +58,11 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
         // Prevent duplicates
         if (currentMessages.find(m => m.id === message.id)) {
             return state;
+        }
+
+        // Play sound if message is incoming (not mine) and is new
+        if (!message.isMine) {
+            playNotificationSound();
         }
 
         return {

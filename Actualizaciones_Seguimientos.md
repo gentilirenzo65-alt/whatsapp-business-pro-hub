@@ -1,5 +1,11 @@
 # Historial de Versiones y Actualizaciones
 
+## [V3.6.0] - 2026-01-31 - Despliegue VPS Verificado 🚀
+- **Procedimiento de Despliegue Documentado:** Se creó `DEPLOYMENT_INFO.md` con las credenciales y pasos exactos para actualizar el VPS sin afectar otros servicios (n8n).
+- **Script de Actualización:** Verificación de `git pull` y reconstrucción de contenedores `app-backend` y `app-frontend`.
+- **Validación de Integridad:** Se confirmó que la actualización NO afecta volúmenes de datos ni configuraciones externas.
+- **Ruta de Instalación:** Identificada y documentada en `/home/debian/app`.
+
 ## [V3.5.0] - 2026-01-31 - Suite Multimedia Completa 🎬
 - **Modo Lightbox (Expandido):** Visor de fotos y videos a pantalla completa idéntico a WhatsApp, con controles integrados.
 - **Acceso a Archivos (Fix Crítico):** Solución definitiva para abrir y descargar documentos (PDFs, Docs) que antes no respondían al clic.
